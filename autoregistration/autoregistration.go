@@ -14,18 +14,24 @@ import (
 )
 
 type AutoRegistration struct {
-	httpClient           *resty.Client
-	k8sClient            *client.Client
-	discoveredExtensions *sync.Map
-	syncTimer            *time.Timer
-	syncMutex            sync.Mutex
+	httpClient                *resty.Client
+	k8sClient                 *client.Client
+	discoveredExtensions      *sync.Map
+	syncTimer                 *time.Timer
+	syncMutex                 sync.Mutex
+	agentRegistrationDebounce time.Duration
+	matchLabels               config.Labels
+	matchLabelsExclude        config.Labels
 }
 
 func UpdateAgentExtensions(httpClient *resty.Client, k8sClient *client.Client) {
 	registrator := AutoRegistration{
-		httpClient:           httpClient,
-		k8sClient:            k8sClient,
-		discoveredExtensions: &sync.Map{},
+		httpClient:                httpClient,
+		k8sClient:                 k8sClient,
+		discoveredExtensions:      &sync.Map{},
+		agentRegistrationDebounce: config.Config.AgentRegistrationDebounce,
+		matchLabels:               config.Config.MatchLabels,
+		matchLabelsExclude:        config.Config.MatchLabelsExclude,
 	}
 
 	k8sClient.WatchPods(registrator.processAddedPod, registrator.processUpdatedPod, registrator.processDeletedPod)
@@ -41,7 +47,7 @@ func (r *AutoRegistration) debounceSyncRegistrations() {
 	}
 
 	// Create new timer
-	r.syncTimer = time.AfterFunc(1*time.Second, r.syncRegistrations)
+	r.syncTimer = time.AfterFunc(r.agentRegistrationDebounce, r.syncRegistrations)
 }
 
 func (r *AutoRegistration) processAddedPod(pod *corev1.Pod) {
@@ -96,13 +102,13 @@ func workloadMatchesSelector(podLabel map[string]string, matchLabel []config.Lab
 func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []extensionConfigAO {
 	result := make([]extensionConfigAO, 0)
 
-	if len(config.Config.MatchLabels) != 0 && !workloadMatchesSelector(pod.Labels, config.Config.MatchLabels) {
+	if len(r.matchLabels) != 0 && !workloadMatchesSelector(pod.Labels, r.matchLabels) {
 		log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("Exclude candidate because it does not match matchLabels.")
-		return nil
+		return result
 	}
-	if len(config.Config.MatchLabelsExclude) != 0 && workloadMatchesSelector(pod.Labels, config.Config.MatchLabelsExclude) {
+	if len(r.matchLabelsExclude) != 0 && workloadMatchesSelector(pod.Labels, r.matchLabelsExclude) {
 		log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("Exclude candidate because it matches matchLabelsExclude.")
-		return nil
+		return result
 	}
 
 	podAnnotations := r.getExtensionAnnotations(pod.Annotations)
@@ -110,7 +116,7 @@ func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []extensionConfig
 		podIP := pod.Status.PodIP
 		if podIP == "" {
 			log.Warn().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("Pod has extension annotations but no IP. Ignoring.")
-			return nil
+			return result
 		}
 		for _, annotation := range podAnnotations {
 			url := fmt.Sprintf("%s://%s", annotation.Protocol, podIP)
@@ -131,7 +137,7 @@ func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []extensionConfig
 			if len(serviceAnnotations) > 0 {
 				if serviceFound {
 					log.Warn().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("Pod has multiple services with extension annotations. Ignoring.")
-					return nil
+					return result
 				}
 				restrictedPorts := make(map[int]string)
 				restrictedIps := make([]string, 0)
@@ -168,7 +174,7 @@ func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []extensionConfig
 
 func (r *AutoRegistration) getExtensionAnnotations(annotations map[string]string) []ExtensionAnnotation {
 	if annotations == nil {
-		return nil
+		return []ExtensionAnnotation{}
 	}
 	keys := []string{"steadybit.com/extension-auto-registration", "steadybit.com/extension-auto-discovery"}
 	for _, key := range keys {
@@ -176,7 +182,7 @@ func (r *AutoRegistration) getExtensionAnnotations(annotations map[string]string
 			return r.parseAnnotationJSON(val)
 		}
 	}
-	return nil
+	return []ExtensionAnnotation{}
 }
 
 func (r *AutoRegistration) parseAnnotationJSON(value string) []ExtensionAnnotation {
@@ -184,7 +190,7 @@ func (r *AutoRegistration) parseAnnotationJSON(value string) []ExtensionAnnotati
 	err := json.Unmarshal([]byte(value), &extAnnotations)
 	if err != nil {
 		log.Err(err).Str("value", value).Msg("Failed to parse extension annotation. Ignoring.")
-		return nil
+		return []ExtensionAnnotation{}
 	}
 	return extAnnotations.Extensions
 }

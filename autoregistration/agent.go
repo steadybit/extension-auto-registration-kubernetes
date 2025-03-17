@@ -23,9 +23,14 @@ func getCurrentRegistrations(httpClient *resty.Client) ([]extensionConfigAO, err
 		return nil, fmt.Errorf("failed to get extension registrations from the agent: %s", resp.Status())
 	}
 	if resp.IsSuccess() {
-		log.Trace().Int("count", len(*currentRegistrations)).Msg("Got extension registrations from the agent")
+		if currentRegistrations != nil {
+			log.Trace().Int("count", len(*currentRegistrations)).Msg("Got extension registrations from the agent")
+			return *currentRegistrations, nil
+		} else {
+			log.Trace().Msg("No extension registrations found on the agent")
+		}
 	}
-	return *currentRegistrations, nil
+	return []extensionConfigAO{}, nil
 }
 
 func removeMissingRegistrations(httpClient *resty.Client, currentRegistrations []extensionConfigAO, discoveredExtensions []extensionConfigAO) {

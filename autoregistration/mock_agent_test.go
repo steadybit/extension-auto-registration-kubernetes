@@ -1,0 +1,46 @@
+package autoregistration
+
+import (
+	"fmt"
+	"github.com/rs/zerolog/log"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+)
+
+var AddedExtensions []string
+var RemovedExtensions []string
+
+func createMockAgent() *httptest.Server {
+	AddedExtensions = []string{}
+	RemovedExtensions = []string{}
+	listener, err := net.Listen("tcp", "0.0.0.0:0")
+	if err != nil {
+		panic(fmt.Sprintf("httptest: failed to listen: %v", err))
+	}
+	server := httptest.Server{
+		Listener: listener,
+		Config: &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Info().Str("path", r.URL.Path).Str("method", r.Method).Str("query", r.URL.RawQuery).Msg("Request received")
+			if strings.HasPrefix(r.URL.Path, "/extensions") && r.Method == http.MethodGet {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("[]"))
+			} else if strings.HasPrefix(r.URL.Path, "/extensions") && r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusOK)
+				body, _ := io.ReadAll(r.Body)
+				AddedExtensions = append(AddedExtensions, string(body))
+			} else if strings.HasPrefix(r.URL.Path, "/extensions") && r.Method == http.MethodDelete {
+				w.WriteHeader(http.StatusOK)
+				body, _ := io.ReadAll(r.Body)
+				RemovedExtensions = append(RemovedExtensions, string(body))
+			} else {
+				w.WriteHeader(http.StatusBadRequest)
+			}
+		})},
+	}
+	server.Start()
+	log.Info().Str("url", server.URL).Msg("Started Mock-Agent")
+	return &server
+}

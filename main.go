@@ -31,8 +31,8 @@ func main() {
 	k8sClient := client.PrepareClient(stopCh)
 
 	//Sleep before first discovery to give the agent time to start
-	log.Info().Int("seconds", config.Config.InitialDelay).Msg("Initial delay before starting the discovery.")
-	time.Sleep(time.Duration(config.Config.InitialDelay) * time.Second)
+	log.Info().Float64("seconds", config.Config.InitialDelay.Seconds()).Msg("Initial delay before starting the discovery.")
+	time.Sleep(config.Config.InitialDelay)
 	autoregistration.UpdateAgentExtensions(httpClientAgent, k8sClient)
 
 	// Wait indefinitely

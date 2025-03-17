@@ -36,7 +36,7 @@ type Client struct {
 func PrepareClient(stopCh <-chan struct{}) *Client {
 	clientset := createClientset()
 	checkPermissions(clientset)
-	return createClient(clientset, stopCh)
+	return CreateClient(clientset, stopCh)
 }
 
 func createClientset() *kubernetes.Clientset {
@@ -77,7 +77,8 @@ func createClientset() *kubernetes.Clientset {
 	return clientset
 }
 
-func createClient(clientset kubernetes.Interface, stopCh <-chan struct{}) *Client {
+// CreateClient is visible for testing
+func CreateClient(clientset kubernetes.Interface, stopCh <-chan struct{}) *Client {
 	client := &Client{}
 
 	var factory informers.SharedInformerFactory
