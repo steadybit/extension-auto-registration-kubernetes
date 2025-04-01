@@ -8,14 +8,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 )
 
+var MU = &sync.RWMutex{}
 var AddedExtensions []string
 var RemovedExtensions []string
 
 func createMockAgent() *httptest.Server {
+	MU.Lock()
 	AddedExtensions = []string{}
 	RemovedExtensions = []string{}
+	MU.Unlock()
 	listener, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
 		panic(fmt.Sprintf("httptest: failed to listen: %v", err))
@@ -30,11 +34,15 @@ func createMockAgent() *httptest.Server {
 			} else if strings.HasPrefix(r.URL.Path, "/extensions") && r.Method == http.MethodPost {
 				w.WriteHeader(http.StatusOK)
 				body, _ := io.ReadAll(r.Body)
+				MU.Lock()
 				AddedExtensions = append(AddedExtensions, string(body))
+				MU.Unlock()
 			} else if strings.HasPrefix(r.URL.Path, "/extensions") && r.Method == http.MethodDelete {
 				w.WriteHeader(http.StatusOK)
 				body, _ := io.ReadAll(r.Body)
+				MU.Lock()
 				RemovedExtensions = append(RemovedExtensions, string(body))
+				MU.Unlock()
 			} else {
 				w.WriteHeader(http.StatusBadRequest)
 			}

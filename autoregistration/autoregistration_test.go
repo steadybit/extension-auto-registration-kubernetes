@@ -239,7 +239,9 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 			r.processAddedPod(tt.args.pod)
 			tt.assertDiscoveredExtensions(t)
 			time.Sleep(500 * time.Millisecond) // wait for the async agent registration
+			MU.RLock()
 			tt.assertAgentRegistrations(t)
+			MU.RUnlock()
 		})
 	}
 }
