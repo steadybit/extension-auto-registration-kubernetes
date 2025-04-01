@@ -1,6 +1,7 @@
 package autoregistration
 
 import (
+	"errors"
 	"fmt"
 	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog/log"
@@ -33,7 +34,9 @@ func getCurrentRegistrations(httpClient *resty.Client) ([]extensionConfigAO, err
 	return []extensionConfigAO{}, nil
 }
 
-func removeMissingRegistrations(httpClient *resty.Client, currentRegistrations []extensionConfigAO, discoveredExtensions []extensionConfigAO) {
+func removeMissingRegistrations(httpClient *resty.Client, currentRegistrations []extensionConfigAO, discoveredExtensions []extensionConfigAO) error {
+	var combinedError error
+
 	for _, currentRegistration := range currentRegistrations {
 		found := false
 		for _, discoveredExtension := range discoveredExtensions {
@@ -50,18 +53,24 @@ func removeMissingRegistrations(httpClient *resty.Client, currentRegistrations [
 				Delete("/extensions")
 			if err != nil {
 				log.Error().Err(err).Msgf("Failed to deregister extension: %v", currentRegistration)
+				combinedError = errors.Join(combinedError, err)
 			}
 			if resp.IsError() {
-				log.Error().Msgf("Failed to deregister extension: %v. Status: %s", currentRegistration, resp.Status())
+				err := fmt.Errorf("failed to deregister extension: %v. Status: %s", currentRegistration, resp.Status())
+				log.Error().Msgf(err.Error())
+				combinedError = errors.Join(combinedError, err)
 			}
 			if resp.IsSuccess() {
 				log.Info().Msgf("De-Registered extension: %v", currentRegistration)
 			}
 		}
 	}
+	return combinedError
 }
 
-func addNewRegistrations(httpClient *resty.Client, currentRegistrations []extensionConfigAO, discoveredExtensions []extensionConfigAO) {
+func addNewRegistrations(httpClient *resty.Client, currentRegistrations []extensionConfigAO, discoveredExtensions []extensionConfigAO) error {
+	var combinedError error
+
 	for _, discoveredExtension := range discoveredExtensions {
 		found := false
 		for _, currentRegistration := range currentRegistrations {
@@ -77,16 +86,21 @@ func addNewRegistrations(httpClient *resty.Client, currentRegistrations []extens
 				SetBody(discoveredExtension).
 				Post("/extensions")
 			if err != nil {
-				log.Error().Err(err).Msgf("Failed to registern extension: %v", discoveredExtension)
+				log.Error().Err(err).Msgf("Failed to register extension: %v", discoveredExtension)
+				combinedError = errors.Join(combinedError, err)
 			}
 			if resp.IsError() {
-				log.Error().Msgf("Failed to register extension: %v. Status: %s", discoveredExtension, resp.Status())
+				err := fmt.Errorf("failed to register extension: %v. Status: %s", discoveredExtension, resp.Status())
+				log.Error().Msgf(err.Error())
+				combinedError = errors.Join(combinedError, err)
 			}
 			if resp.IsSuccess() {
 				log.Info().Msgf("Registered extension: %v", discoveredExtension)
 			}
 		}
 	}
+
+	return combinedError
 }
 
 func extensionsEqual(a, b extensionConfigAO) bool {

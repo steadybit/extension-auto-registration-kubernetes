@@ -234,13 +234,14 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 				httpClient:                httpClient,
 				k8sClient:                 k8sclient,
 				discoveredExtensions:      discoveredExtensions,
-				agentRegistrationDebounce: 0,
+				agentRegistrationInterval: 1 * time.Second,
 				matchLabels:               tt.args.matchLabels,
 				matchLabelsExclude:        tt.args.matchLabelsExclude,
 			}
 			r.processAddedPod(tt.args.pod)
+			r.syncRegistrations()
+			assert.False(t, r.isDirty.Load(), "isDirty should be false after sync")
 			tt.assertDiscoveredExtensions(t)
-			time.Sleep(500 * time.Millisecond) // wait for the async agent registration
 			MU.RLock()
 			tt.assertAgentRegistrations(t)
 			MU.RUnlock()

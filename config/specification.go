@@ -9,14 +9,15 @@ import (
 )
 
 type Specification struct {
-	AgentKey                  string        `json:"agentKey" split_words:"true" required:"true"`
-	AgentPort                 int           `json:"agentPort" split_words:"true" default:"42899"`
-	InitialDelay              time.Duration `json:"InitialDelay" split_words:"true" default:"5s"`
-	NamespaceFilter           string        `json:"namespaceFilter" split_words:"true" required:"false"`
-	LogKubernetesHttpRequests bool          `json:"LogKubernetesHttpRequests" split_words:"true" default:"false"`
-	MatchLabels               Labels        `json:"matchLabels" split_words:"true" required:"false"`
-	MatchLabelsExclude        Labels        `json:"matchLabelsExclude" split_words:"true" required:"false"`
-	AgentRegistrationDebounce time.Duration `json:"agentRegistrationDebounce" split_words:"true" default:"1s"`
+	AgentKey                            string        `json:"agentKey" split_words:"true" required:"true"`
+	AgentPort                           int           `json:"agentPort" split_words:"true" default:"42899"`
+	NamespaceFilter                     string        `json:"namespaceFilter" split_words:"true" required:"false"`
+	LogKubernetesHttpRequests           bool          `json:"LogKubernetesHttpRequests" split_words:"true" default:"false"`
+	MatchLabels                         Labels        `json:"matchLabels" split_words:"true" required:"false"`
+	MatchLabelsExclude                  Labels        `json:"matchLabelsExclude" split_words:"true" required:"false"`
+	AgentRegistrationInitialDelay       time.Duration `json:"agentRegistrationInitialDelay" split_words:"true" default:"5s"`
+	AgentRegistrationInterval           time.Duration `json:"agentRegistrationInterval" split_words:"true" default:"1s"`
+	AgentRegistrationIntervalAfterError time.Duration `json:"agentRegistrationIntervalAfterError" split_words:"true" default:"5s"`
 }
 
 type Labels []Label

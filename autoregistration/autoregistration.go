@@ -10,44 +10,35 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type AutoRegistration struct {
-	httpClient                *resty.Client
-	k8sClient                 *client.Client
-	discoveredExtensions      *sync.Map
-	syncTimer                 *time.Timer
-	syncMutex                 sync.Mutex
-	agentRegistrationDebounce time.Duration
-	matchLabels               config.Labels
-	matchLabelsExclude        config.Labels
+	httpClient                          *resty.Client
+	k8sClient                           *client.Client
+	discoveredExtensions                *sync.Map
+	isDirty                             atomic.Bool
+	agentRegistrationInterval           time.Duration
+	agentRegistrationIntervalAfterError time.Duration
+	matchLabels                         config.Labels
+	matchLabelsExclude                  config.Labels
 }
 
 func UpdateAgentExtensions(httpClient *resty.Client, k8sClient *client.Client) {
 	registrator := AutoRegistration{
-		httpClient:                httpClient,
-		k8sClient:                 k8sClient,
-		discoveredExtensions:      &sync.Map{},
-		agentRegistrationDebounce: config.Config.AgentRegistrationDebounce,
-		matchLabels:               config.Config.MatchLabels,
-		matchLabelsExclude:        config.Config.MatchLabelsExclude,
+		httpClient:                          httpClient,
+		k8sClient:                           k8sClient,
+		discoveredExtensions:                &sync.Map{},
+		agentRegistrationInterval:           config.Config.AgentRegistrationInterval,
+		agentRegistrationIntervalAfterError: config.Config.AgentRegistrationIntervalAfterError,
+		matchLabels:                         config.Config.MatchLabels,
+		matchLabelsExclude:                  config.Config.MatchLabelsExclude,
+		isDirty:                             atomic.Bool{},
 	}
 
+	registrator.syncRegistrations()
 	k8sClient.WatchPods(registrator.processAddedPod, registrator.processUpdatedPod, registrator.processDeletedPod)
-}
-
-func (r *AutoRegistration) debounceSyncRegistrations() {
-	r.syncMutex.Lock()
-	defer r.syncMutex.Unlock()
-
-	// Stop existing timer if it's running
-	if r.syncTimer != nil {
-		r.syncTimer.Stop()
-	}
-
-	// Create new timer
-	r.syncTimer = time.AfterFunc(r.agentRegistrationDebounce, r.syncRegistrations)
 }
 
 func (r *AutoRegistration) processAddedPod(pod *corev1.Pod) {
@@ -57,7 +48,7 @@ func (r *AutoRegistration) processAddedPod(pod *corev1.Pod) {
 		if len(extensions) > 0 {
 			r.discoveredExtensions.Store(r.key(pod), extensions)
 			log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(extensions)).Msg("Adding extension registration.")
-			r.debounceSyncRegistrations()
+			r.isDirty.Store(true)
 		}
 	}
 }
@@ -69,14 +60,14 @@ func (r *AutoRegistration) processUpdatedPod(_ *corev1.Pod, new *corev1.Pod) {
 		if len(extensions) > 0 {
 			r.discoveredExtensions.Store(r.key(new), extensions)
 			log.Debug().Str("pod", new.Name).Str("namespace", new.Namespace).Int("count", len(extensions)).Msg("Adding extension registration.")
-			r.debounceSyncRegistrations()
+			r.isDirty.Store(true)
 		}
 	} else {
 		value, loaded := r.discoveredExtensions.LoadAndDelete(r.key(new))
 		if loaded {
 			v := value.([]extensionConfigAO)
 			log.Debug().Str("pod", new.Name).Str("namespace", new.Namespace).Int("count", len(v)).Msg("Remove extension registration.")
-			r.debounceSyncRegistrations()
+			r.isDirty.Store(true)
 		}
 	}
 }
@@ -86,7 +77,7 @@ func (r *AutoRegistration) processDeletedPod(pod *corev1.Pod) {
 	if loaded {
 		v := value.([]extensionConfigAO)
 		log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(v)).Msg("Remove extension registration.")
-		r.debounceSyncRegistrations()
+		r.isDirty.Store(true)
 	}
 }
 
@@ -233,16 +224,33 @@ func (r *AutoRegistration) containsValue(m map[int]string, value string) bool {
 }
 
 func (r *AutoRegistration) syncRegistrations() {
-	currentRegistrations, err := getCurrentRegistrations(r.httpClient)
-	if err == nil {
+	if !r.isDirty.Load() {
+		time.AfterFunc(r.agentRegistrationInterval, r.syncRegistrations)
+		log.Trace().Msgf("No changes detected, waiting for %s before next check.", r.agentRegistrationInterval)
+		return
+	}
+
+	var errGet, errRemove, errAdd error
+	currentRegistrations, errGet := getCurrentRegistrations(r.httpClient)
+	if errGet == nil {
 		discoveredExtensions := make([]extensionConfigAO, 0)
 		r.discoveredExtensions.Range(func(key, value any) bool {
 			v := value.([]extensionConfigAO)
 			discoveredExtensions = append(discoveredExtensions, v...)
 			return true
 		})
-		removeMissingRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
-		addNewRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
+		log.Info().Str("flag", "true").Msg("Resetting dirty flag")
+		r.isDirty.Store(false)
+		errRemove = removeMissingRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
+		errAdd = addNewRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
+	}
+
+	if (errGet != nil) || (errRemove != nil) || (errAdd != nil) {
+		r.isDirty.Store(true)
+		log.Info().Msgf("Retry in %s", r.agentRegistrationIntervalAfterError)
+		time.AfterFunc(r.agentRegistrationIntervalAfterError, r.syncRegistrations)
+	} else {
+		time.AfterFunc(r.agentRegistrationInterval, r.syncRegistrations)
 	}
 }
 
