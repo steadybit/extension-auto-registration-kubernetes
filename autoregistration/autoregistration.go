@@ -239,7 +239,6 @@ func (r *AutoRegistration) syncRegistrations() {
 			discoveredExtensions = append(discoveredExtensions, v...)
 			return true
 		})
-		log.Info().Str("flag", "true").Msg("Resetting dirty flag")
 		r.isDirty.Store(false)
 		errRemove = removeMissingRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
 		errAdd = addNewRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
@@ -250,6 +249,7 @@ func (r *AutoRegistration) syncRegistrations() {
 		log.Info().Msgf("Retry in %s", r.agentRegistrationIntervalAfterError)
 		time.AfterFunc(r.agentRegistrationIntervalAfterError, r.syncRegistrations)
 	} else {
+		log.Debug().Msg("Registrations synced successfully.")
 		time.AfterFunc(r.agentRegistrationInterval, r.syncRegistrations)
 	}
 }
