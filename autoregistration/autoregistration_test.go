@@ -226,7 +226,9 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 			discoveredExtensions.Clear()
 			k8sclient, k8stestclient := getTestClient(stopCh)
 			if tt.args.service != nil {
-				_, _ = k8stestclient.CoreV1().Services(tt.args.service.Namespace).Create(context.Background(), tt.args.service, metav1.CreateOptions{})
+				_, err := k8stestclient.CoreV1().Services(tt.args.service.Namespace).Create(context.Background(), tt.args.service, metav1.CreateOptions{})
+				assert.NoError(t, err, "Service creation should succeed")
+				time.Sleep(100 * time.Millisecond)
 			}
 			r := &AutoRegistration{
 				httpClient:                httpClient,
