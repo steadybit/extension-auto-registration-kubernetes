@@ -15,7 +15,7 @@ type Specification struct {
 	LogKubernetesHttpRequests           bool          `json:"LogKubernetesHttpRequests" split_words:"true" default:"false"`
 	MatchLabels                         Labels        `json:"matchLabels" split_words:"true" required:"false"`
 	MatchLabelsExclude                  Labels        `json:"matchLabelsExclude" split_words:"true" required:"false"`
-	AgentRegistrationInitialDelay       time.Duration `json:"agentRegistrationInitialDelay" split_words:"true" default:"5s"`
+	AgentRegistrationInitialDelay       time.Duration `json:"agentRegistrationInitialDelay" split_words:"true" default:"25s"`
 	AgentRegistrationInterval           time.Duration `json:"agentRegistrationInterval" split_words:"true" default:"1s"`
 	AgentRegistrationIntervalAfterError time.Duration `json:"agentRegistrationIntervalAfterError" split_words:"true" default:"5s"`
 }
