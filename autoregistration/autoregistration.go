@@ -122,17 +122,12 @@ func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []extensionConfig
 			})
 		}
 	} else {
-		serviceFound := false
 		for _, service := range r.k8sClient.ServicesByPod(pod) {
+			log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Str("service", service.Name).Msg("Found service for pod.")
 			serviceAnnotations := r.getExtensionAnnotations(service.Annotations)
 			if len(serviceAnnotations) > 0 {
-				if serviceFound {
-					log.Warn().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("Pod has multiple services with extension annotations. Ignoring.")
-					return result
-				}
 				restrictedPorts := make(map[int]string)
 				restrictedIps := make([]string, 0)
-				serviceFound = true
 				for _, s := range service.Spec.Ports {
 					restrictedPorts[int(s.Port)] = "ServicePort"
 				}
