@@ -231,6 +231,11 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 				assert.NoError(t, err, "Service creation should succeed")
 				time.Sleep(100 * time.Millisecond)
 			}
+			if tt.args.pod != nil {
+				_, err := k8stestclient.CoreV1().Pods(tt.args.pod.Namespace).Create(context.Background(), tt.args.pod, metav1.CreateOptions{})
+				assert.NoError(t, err, "Pod creation should succeed")
+				time.Sleep(100 * time.Millisecond)
+			}
 			r := &AutoRegistration{
 				httpClient:                httpClient,
 				k8sClient:                 k8sclient,
@@ -239,7 +244,10 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 				matchLabels:               tt.args.matchLabels,
 				matchLabelsExclude:        tt.args.matchLabelsExclude,
 			}
-			r.processAddedPod(tt.args.pod)
+			//do not pass the pod from args directly to processAddedPod to simulate the usage of transformers in the k8s client
+			pod, err := k8stestclient.CoreV1().Pods(tt.args.pod.Namespace).Get(context.Background(), tt.args.pod.Name, metav1.GetOptions{})
+			assert.NoError(t, err, "Getting pod should succeed")
+			r.processAddedPod(pod)
 			r.syncRegistrations()
 			assert.False(t, r.isDirty.Load(), "isDirty should be false after sync")
 			tt.assertDiscoveredExtensions(t)
