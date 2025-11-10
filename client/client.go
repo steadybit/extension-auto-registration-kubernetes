@@ -172,15 +172,3 @@ func (c *Client) IsPodRunningAndReady(pod *corev1.Pod) bool {
 	}
 	return false
 }
-
-func (c *Client) onlyRunningAndReadyPods(list []*corev1.Pod) []*corev1.Pod {
-	runningAndReadyPods := make([]*corev1.Pod, 0)
-
-	for _, pod := range list {
-		if c.IsPodRunningAndReady(pod) {
-			runningAndReadyPods = append(runningAndReadyPods, pod)
-		}
-	}
-
-	return runningAndReadyPods
-}
