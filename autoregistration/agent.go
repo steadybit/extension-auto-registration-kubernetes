@@ -9,8 +9,8 @@ import (
 	extensionconfig "github.com/steadybit/extension-auto-registration-kubernetes/config"
 )
 
-func getCurrentRegistrations(httpClient *resty.Client) ([]extensionConfigAO, error) {
-	var currentRegistrations *[]extensionConfigAO
+func getCurrentRegistrations(httpClient *resty.Client) ([]ExtensionConfigAO, error) {
+	var currentRegistrations *[]ExtensionConfigAO
 	resp, err := httpClient.R().
 		SetHeader("Accept", "application/json").
 		SetResult(&currentRegistrations).
@@ -32,10 +32,10 @@ func getCurrentRegistrations(httpClient *resty.Client) ([]extensionConfigAO, err
 			log.Trace().Msg("No extension registrations found on the agent")
 		}
 	}
-	return []extensionConfigAO{}, nil
+	return []ExtensionConfigAO{}, nil
 }
 
-func removeMissingRegistrations(httpClient *resty.Client, currentRegistrations []extensionConfigAO, discoveredExtensions []extensionConfigAO) error {
+func removeMissingRegistrations(httpClient *resty.Client, currentRegistrations []ExtensionConfigAO, discoveredExtensions []ExtensionConfigAO) error {
 	var combinedError error
 
 	for _, currentRegistration := range currentRegistrations {
@@ -69,7 +69,7 @@ func removeMissingRegistrations(httpClient *resty.Client, currentRegistrations [
 	return combinedError
 }
 
-func addNewRegistrations(httpClient *resty.Client, currentRegistrations []extensionConfigAO, discoveredExtensions []extensionConfigAO) error {
+func addNewRegistrations(httpClient *resty.Client, currentRegistrations []ExtensionConfigAO, discoveredExtensions []ExtensionConfigAO) error {
 	var combinedError error
 
 	for _, discoveredExtension := range discoveredExtensions {
@@ -104,7 +104,7 @@ func addNewRegistrations(httpClient *resty.Client, currentRegistrations []extens
 	return combinedError
 }
 
-func extensionsEqual(a, b extensionConfigAO) bool {
+func extensionsEqual(a, b ExtensionConfigAO) bool {
 	if a.Url != b.Url {
 		return false
 	}

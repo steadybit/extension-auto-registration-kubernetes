@@ -1,6 +1,6 @@
 package autoregistration
 
-type extensionConfigAO struct {
+type ExtensionConfigAO struct {
 	UnixSocket      string         `json:"unixSocket,omitempty"` //important even if not used to be able to delete existing registrations
 	Url             string         `json:"url,omitempty"`
 	Types           []string       `json:"types,omitempty"`

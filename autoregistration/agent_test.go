@@ -9,18 +9,18 @@ import (
 func TestExtensionsEqual(t *testing.T) {
 	tests := []struct {
 		name     string
-		a        extensionConfigAO
-		b        extensionConfigAO
+		a        ExtensionConfigAO
+		b        ExtensionConfigAO
 		expected bool
 	}{
 		{
 			name: "identical extensions should be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.1"},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.1"},
@@ -29,12 +29,12 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with different URLs should not be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.1"},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url:             "http://test.example.com:8081",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.1"},
@@ -43,12 +43,12 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with different restricted ports should not be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.1"},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8081: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.1"},
@@ -57,12 +57,12 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with different port descriptions should not be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.1"},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ServicePort"},
 				RestrictedIps:   []string{"192.168.1.1"},
@@ -71,12 +71,12 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with different restricted IPs should not be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.1"},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.2"},
@@ -85,12 +85,12 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with same IPs in different order should be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.1", "192.168.1.2"},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.2", "192.168.1.1"},
@@ -99,12 +99,12 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with empty restricted ports should be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{},
 				RestrictedIps:   []string{"192.168.1.1"},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{},
 				RestrictedIps:   []string{"192.168.1.1"},
@@ -113,12 +113,12 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with empty restricted IPs should be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{},
@@ -127,12 +127,12 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with nil vs empty restricted ports should be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: nil,
 				RestrictedIps:   []string{"192.168.1.1"},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{},
 				RestrictedIps:   []string{"192.168.1.1"},
@@ -141,12 +141,12 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with nil vs empty restricted IPs should be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   nil,
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{},
@@ -155,7 +155,7 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with multiple ports should be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url: "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{
 					8080: "ContainerPort",
@@ -164,7 +164,7 @@ func TestExtensionsEqual(t *testing.T) {
 				},
 				RestrictedIps: []string{"192.168.1.1"},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url: "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{
 					8080: "ContainerPort",
@@ -177,7 +177,7 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with different number of ports should not be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url: "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{
 					8080: "ContainerPort",
@@ -185,7 +185,7 @@ func TestExtensionsEqual(t *testing.T) {
 				},
 				RestrictedIps: []string{"192.168.1.1"},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url: "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{
 					8080: "ContainerPort",
@@ -196,12 +196,12 @@ func TestExtensionsEqual(t *testing.T) {
 		},
 		{
 			name: "extensions with different number of IPs should not be equal",
-			a: extensionConfigAO{
+			a: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.1", "192.168.1.2"},
 			},
-			b: extensionConfigAO{
+			b: ExtensionConfigAO{
 				Url:             "http://test.example.com:8080",
 				RestrictedPorts: map[int]string{8080: "ContainerPort"},
 				RestrictedIps:   []string{"192.168.1.1"},

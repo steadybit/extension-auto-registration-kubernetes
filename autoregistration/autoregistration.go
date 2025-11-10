@@ -26,11 +26,11 @@ type AutoRegistration struct {
 	matchLabelsExclude                  config.Labels
 }
 
-func UpdateAgentExtensions(httpClient *resty.Client, k8sClient *client.Client) {
+func UpdateAgentExtensions(httpClient *resty.Client, k8sClient *client.Client, discoveredExtensions *sync.Map) *AutoRegistration {
 	registrator := AutoRegistration{
 		httpClient:                          httpClient,
 		k8sClient:                           k8sClient,
-		discoveredExtensions:                &sync.Map{},
+		discoveredExtensions:                discoveredExtensions,
 		agentRegistrationInterval:           config.Config.AgentRegistrationInterval,
 		agentRegistrationIntervalAfterError: config.Config.AgentRegistrationIntervalAfterError,
 		matchLabels:                         config.Config.MatchLabels,
@@ -40,6 +40,11 @@ func UpdateAgentExtensions(httpClient *resty.Client, k8sClient *client.Client) {
 
 	registrator.syncRegistrations()
 	k8sClient.WatchPods(registrator.processAddedPod, registrator.processUpdatedPod, registrator.processDeletedPod)
+	return &registrator
+}
+
+func (r *AutoRegistration) IsDirty() bool {
+	return r.isDirty.Load()
 }
 
 func (r *AutoRegistration) processAddedPod(pod *corev1.Pod) {
@@ -66,7 +71,7 @@ func (r *AutoRegistration) processUpdatedPod(_ *corev1.Pod, new *corev1.Pod) {
 	} else {
 		value, loaded := r.discoveredExtensions.LoadAndDelete(r.key(new))
 		if loaded {
-			v := value.([]extensionConfigAO)
+			v := value.([]ExtensionConfigAO)
 			log.Debug().Str("pod", new.Name).Str("namespace", new.Namespace).Int("count", len(v)).Msg("Remove extension registration.")
 			r.isDirty.Store(true)
 		}
@@ -76,7 +81,7 @@ func (r *AutoRegistration) processDeletedPod(pod *corev1.Pod) {
 	log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("k8s pod deleted")
 	value, loaded := r.discoveredExtensions.LoadAndDelete(r.key(pod))
 	if loaded {
-		v := value.([]extensionConfigAO)
+		v := value.([]ExtensionConfigAO)
 		log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(v)).Msg("Remove extension registration.")
 		r.isDirty.Store(true)
 	}
@@ -91,8 +96,8 @@ func workloadMatchesSelector(podLabel map[string]string, matchLabel []config.Lab
 	return true
 }
 
-func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []extensionConfigAO {
-	result := make([]extensionConfigAO, 0)
+func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []ExtensionConfigAO {
+	result := make([]ExtensionConfigAO, 0)
 
 	if len(r.matchLabels) != 0 && !workloadMatchesSelector(pod.Labels, r.matchLabels) {
 		log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("Exclude candidate because it does not match matchLabels.")
@@ -116,7 +121,7 @@ func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []extensionConfig
 				url += ":" + strconv.Itoa(annotation.Port)
 			}
 			url += annotation.Path
-			result = append(result, extensionConfigAO{
+			result = append(result, ExtensionConfigAO{
 				Url:             url,
 				RestrictedPorts: r.getAdditionalPortsOfPod(pod),
 				RestrictedIps:   []string{podIP},
@@ -147,7 +152,7 @@ func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []extensionConfig
 						url += ":" + strconv.Itoa(annotation.Port)
 					}
 					url = url + annotation.Path
-					result = append(result, extensionConfigAO{
+					result = append(result, ExtensionConfigAO{
 						Url:             url,
 						RestrictedIps:   restrictedIps,
 						RestrictedPorts: restrictedPorts,
@@ -229,9 +234,9 @@ func (r *AutoRegistration) syncRegistrations() {
 	var errGet, errRemove, errAdd error
 	currentRegistrations, errGet := getCurrentRegistrations(r.httpClient)
 	if errGet == nil {
-		discoveredExtensions := make([]extensionConfigAO, 0)
+		discoveredExtensions := make([]ExtensionConfigAO, 0)
 		r.discoveredExtensions.Range(func(key, value any) bool {
-			v := value.([]extensionConfigAO)
+			v := value.([]ExtensionConfigAO)
 			discoveredExtensions = append(discoveredExtensions, v...)
 			return true
 		})

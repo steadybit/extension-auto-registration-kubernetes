@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/steadybit/extension-auto-registration-kubernetes/autoregistration"
 	"github.com/steadybit/extension-auto-registration-kubernetes/client"
 	"github.com/steadybit/extension-auto-registration-kubernetes/config"
 	"github.com/stretchr/testify/assert"
@@ -39,7 +40,7 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 			assertDiscoveredExtensions: func(t *testing.T) {
 				value, ok := discoveredExtensions.Load("default/test-pod")
 				assert.True(t, ok, "Pod should be added to discoveredExtensions")
-				extensions := value.([]extensionConfigAO)
+				extensions := value.([]autoregistration.ExtensionConfigAO)
 				assert.Equal(t, 1, len(extensions), "There should be one extension registered")
 				assert.Equal(t, "http://192.168.1.1:8080", extensions[0].Url, "Extension URL should match")
 			},
@@ -60,7 +61,7 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 			assertDiscoveredExtensions: func(t *testing.T) {
 				value, ok := discoveredExtensions.Load("default/test-pod")
 				assert.True(t, ok, "Pod should be added to discoveredExtensions")
-				extensions := value.([]extensionConfigAO)
+				extensions := value.([]autoregistration.ExtensionConfigAO)
 				assert.Equal(t, 1, len(extensions), "There should be one extension registered")
 				assert.Equal(t, "http://192.168.1.1:8080", extensions[0].Url, "Extension URL should match")
 			},
@@ -107,7 +108,7 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 			assertDiscoveredExtensions: func(t *testing.T) {
 				value, ok := discoveredExtensions.Load("default/test-pod")
 				assert.True(t, ok, "Pod should be added to discoveredExtensions")
-				extensions := value.([]extensionConfigAO)
+				extensions := value.([]autoregistration.ExtensionConfigAO)
 				assert.Equal(t, 1, len(extensions), "There should be one extension registered")
 				assert.Equal(t, "http://test-service.default.svc.cluster.local:8085", extensions[0].Url, "Extension URL should match")
 			},
@@ -226,6 +227,13 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 			defer close(stopCh)
 			discoveredExtensions.Clear()
 			k8sclient, k8stestclient := getTestClient(stopCh)
+
+			config.Config.AgentRegistrationInterval = 1 * time.Second
+			config.Config.AgentRegistrationIntervalAfterError = 1 * time.Second
+			config.Config.MatchLabels = tt.args.matchLabels
+			config.Config.MatchLabelsExclude = tt.args.matchLabelsExclude
+			registrator := autoregistration.UpdateAgentExtensions(httpClient, k8sclient, discoveredExtensions)
+
 			if tt.args.service != nil {
 				_, err := k8stestclient.CoreV1().Services(tt.args.service.Namespace).Create(context.Background(), tt.args.service, metav1.CreateOptions{})
 				assert.NoError(t, err, "Service creation should succeed")
@@ -236,26 +244,25 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 				assert.NoError(t, err, "Pod creation should succeed")
 				time.Sleep(100 * time.Millisecond)
 			}
-			r := &AutoRegistration{
-				httpClient:                httpClient,
-				k8sClient:                 k8sclient,
-				discoveredExtensions:      discoveredExtensions,
-				agentRegistrationInterval: 1 * time.Second,
-				matchLabels:               tt.args.matchLabels,
-				matchLabelsExclude:        tt.args.matchLabelsExclude,
-			}
-			//do not pass the pod from args directly to processAddedPod to simulate the usage of transformers in the k8s client
-			pod, err := k8stestclient.CoreV1().Pods(tt.args.pod.Namespace).Get(context.Background(), tt.args.pod.Name, metav1.GetOptions{})
-			assert.NoError(t, err, "Getting pod should succeed")
-			r.processAddedPod(pod)
-			r.syncRegistrations()
-			assert.False(t, r.isDirty.Load(), "isDirty should be false after sync")
+			waitUntilSynched(t, registrator)
+
 			tt.assertDiscoveredExtensions(t)
 			MU.RLock()
 			tt.assertAgentRegistrations(t)
 			MU.RUnlock()
 		})
 	}
+}
+
+func waitUntilSynched(t *testing.T, registrator *autoregistration.AutoRegistration) {
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if !registrator.IsDirty() {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("Registrator did not sync in time")
 }
 
 func getTestPod(modifier func(p *corev1.Pod)) *corev1.Pod {
