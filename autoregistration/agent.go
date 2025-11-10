@@ -58,7 +58,7 @@ func removeMissingRegistrations(httpClient *resty.Client, currentRegistrations [
 			}
 			if resp.IsError() {
 				err := fmt.Errorf("failed to deregister extension: %v. Status: %s", currentRegistration, resp.Status())
-				log.Error().Msgf(err.Error())
+				log.Error().Msg(err.Error())
 				combinedError = errors.Join(combinedError, err)
 			}
 			if resp.IsSuccess() {
@@ -92,7 +92,7 @@ func addNewRegistrations(httpClient *resty.Client, currentRegistrations []extens
 			}
 			if resp.IsError() {
 				err := fmt.Errorf("failed to register extension: %v. Status: %s", discoveredExtension, resp.Status())
-				log.Error().Msgf(err.Error())
+				log.Error().Msg(err.Error())
 				combinedError = errors.Join(combinedError, err)
 			}
 			if resp.IsSuccess() {
