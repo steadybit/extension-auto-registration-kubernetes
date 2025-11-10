@@ -3,6 +3,7 @@ package autoregistration
 import (
 	"errors"
 	"fmt"
+
 	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog/log"
 	extensionconfig "github.com/steadybit/extension-auto-registration-kubernetes/config"

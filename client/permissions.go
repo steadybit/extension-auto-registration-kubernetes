@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+
 	"github.com/rs/zerolog/log"
 	"github.com/steadybit/extension-auto-registration-kubernetes/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

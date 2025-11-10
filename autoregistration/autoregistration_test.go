@@ -2,6 +2,10 @@ package autoregistration
 
 import (
 	"context"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/go-resty/resty/v2"
 	"github.com/steadybit/extension-auto-registration-kubernetes/client"
 	"github.com/steadybit/extension-auto-registration-kubernetes/config"
@@ -11,9 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	testclient "k8s.io/client-go/kubernetes/fake"
-	"sync"
-	"testing"
-	"time"
 )
 
 func TestAutoRegistration_should_add_pods(t *testing.T) {

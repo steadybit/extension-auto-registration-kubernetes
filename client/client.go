@@ -6,6 +6,9 @@ package client
 import (
 	"errors"
 	"flag"
+	"path/filepath"
+	"time"
+
 	"github.com/rs/zerolog/log"
 	extconfig "github.com/steadybit/extension-auto-registration-kubernetes/config"
 	corev1 "k8s.io/api/core/v1"
@@ -18,8 +21,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	"path/filepath"
-	"time"
 )
 
 type Client struct {

@@ -3,15 +3,16 @@ package autoregistration
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog/log"
 	"github.com/steadybit/extension-auto-registration-kubernetes/client"
 	"github.com/steadybit/extension-auto-registration-kubernetes/config"
 	corev1 "k8s.io/api/core/v1"
-	"strconv"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 type AutoRegistration struct {

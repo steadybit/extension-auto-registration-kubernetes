@@ -2,13 +2,14 @@ package autoregistration
 
 import (
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 )
 
 var MU = &sync.RWMutex{}
