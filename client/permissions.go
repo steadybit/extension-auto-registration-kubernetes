@@ -42,10 +42,9 @@ var requiredPermissions = []requiredPermission{
 	{group: "", resource: "pods", verbs: []string{"get", "list", "watch"}},
 }
 
-func checkPermissions(client *kubernetes.Clientset) *PermissionCheckResult {
+func checkPermissions(client kubernetes.Interface) *PermissionCheckResult {
 	result := make(map[string]PermissionCheckOutcome)
 	reviews := client.AuthorizationV1().SelfSubjectAccessReviews()
-	errors := false
 
 	for _, p := range requiredPermissions {
 		for _, verb := range p.verbs {
@@ -65,7 +64,6 @@ func checkPermissions(client *kubernetes.Clientset) *PermissionCheckResult {
 			}
 			if err != nil || !review.Status.Allowed {
 				result[p.Key(verb)] = ERROR
-				errors = true
 			} else {
 				result[p.Key(verb)] = OK
 			}
@@ -73,10 +71,6 @@ func checkPermissions(client *kubernetes.Clientset) *PermissionCheckResult {
 	}
 
 	logPermissionCheckResult(result)
-	if errors {
-		log.Fatal().Msg("Required permissions are missing. Exit now.")
-	}
-
 	return &PermissionCheckResult{
 		Permissions: result,
 	}
@@ -98,12 +92,14 @@ func logPermissionCheckResult(permissions map[string]PermissionCheckOutcome) {
 	}
 }
 
-func (p *PermissionCheckResult) hasPermissions(requiredPermissions []string) bool {
-	for _, rp := range requiredPermissions {
-		outcome, ok := p.Permissions[rp]
-		if !ok || outcome != OK {
-			return false
+func (result *PermissionCheckResult) HasErrors() bool {
+	if result == nil {
+		return true
+	}
+	for _, v := range result.Permissions {
+		if v == ERROR {
+			return true
 		}
 	}
-	return true
+	return false
 }

@@ -4,111 +4,116 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	authorizationv1 "k8s.io/api/authorization/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	testclient "k8s.io/client-go/kubernetes/fake"
+	ktesting "k8s.io/client-go/testing"
 )
 
-func TestRequiredPermission_Key(t *testing.T) {
+func TestPermissionCheckResult_HasErrors(t *testing.T) {
 	tests := []struct {
-		name               string
-		requiredPermission requiredPermission
-		verb               string
-		expected           string
-	}{
-		{
-			name: "key with group and resource",
-			requiredPermission: requiredPermission{
-				group:    "apps",
-				resource: "deployments",
-			},
-			verb:     "get",
-			expected: "apps/deployments/get",
-		},
-		{
-			name: "key without group (core API)",
-			requiredPermission: requiredPermission{
-				group:    "",
-				resource: "pods",
-			},
-			verb:     "list",
-			expected: "pods/list",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.requiredPermission.Key(tt.verb)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestPermissionCheckResult_hasPermissions(t *testing.T) {
-	tests := []struct {
-		name                 string
+		name                  string
 		permissionCheckResult *PermissionCheckResult
-		requiredPermissions   []string
-		expected             bool
+		expected              bool
 	}{
 		{
-			name: "should return true when all permissions are granted",
+			name: "should return false when all permissions are OK",
 			permissionCheckResult: &PermissionCheckResult{
 				Permissions: map[string]PermissionCheckOutcome{
 					"pods/get":      OK,
-					"pods/list":     OK,
-					"services/get":  OK,
 					"services/list": OK,
 				},
 			},
-			requiredPermissions: []string{"pods/get", "services/list"},
-			expected:            true,
+			expected: false,
 		},
 		{
-			name: "should return false when some permissions are missing",
+			name: "should return true when some permissions have errors",
 			permissionCheckResult: &PermissionCheckResult{
 				Permissions: map[string]PermissionCheckOutcome{
 					"pods/get":     OK,
 					"services/get": ERROR,
 				},
 			},
-			requiredPermissions: []string{"pods/get", "services/get"},
-			expected:            false,
-		},
-		{
-			name: "should return false when permission is not in map",
-			permissionCheckResult: &PermissionCheckResult{
-				Permissions: map[string]PermissionCheckOutcome{
-					"pods/get": OK,
-				},
-			},
-			requiredPermissions: []string{"pods/get", "pods/list"},
-			expected:            false,
-		},
-		{
-			name: "should return true when no permissions required",
-			permissionCheckResult: &PermissionCheckResult{
-				Permissions: map[string]PermissionCheckOutcome{
-					"pods/get": OK,
-				},
-			},
-			requiredPermissions: []string{},
-			expected:            true,
-		},
-		{
-			name: "should return false when permission has error outcome",
-			permissionCheckResult: &PermissionCheckResult{
-				Permissions: map[string]PermissionCheckOutcome{
-					"pods/get":  OK,
-					"pods/list": ERROR,
-				},
-			},
-			requiredPermissions: []string{"pods/get", "pods/list"},
-			expected:            false,
+			expected: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := tt.permissionCheckResult.hasPermissions(tt.requiredPermissions)
+			result := tt.permissionCheckResult.HasErrors()
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestCheckPermissions(t *testing.T) {
+	tests := []struct {
+		name             string
+		setupReactions   func(*testclient.Clientset)
+		expectedOutcomes map[string]PermissionCheckOutcome
+	}{
+		{
+			name: "should return OK for allowed permissions",
+			setupReactions: func(client *testclient.Clientset) {
+				client.PrependReactor("create", "selfsubjectaccessreviews", func(action ktesting.Action) (handled bool, ret runtime.Object, err error) {
+					return true, &authorizationv1.SelfSubjectAccessReview{
+						Status: authorizationv1.SubjectAccessReviewStatus{
+							Allowed: true,
+						},
+					}, nil
+				})
+			},
+			expectedOutcomes: map[string]PermissionCheckOutcome{
+				"services/get":   OK,
+				"services/list":  OK,
+				"services/watch": OK,
+				"pods/get":       OK,
+				"pods/list":      OK,
+				"pods/watch":     OK,
+			},
+		},
+		{
+			name: "should return ERROR for denied permissions",
+			setupReactions: func(client *testclient.Clientset) {
+				client.PrependReactor("create", "selfsubjectaccessreviews", func(action ktesting.Action) (handled bool, ret runtime.Object, err error) {
+					createAction := action.(ktesting.CreateAction)
+					sar := createAction.GetObject().(*authorizationv1.SelfSubjectAccessReview)
+
+					allowed := sar.Spec.ResourceAttributes.Resource == "services"
+
+					return true, &authorizationv1.SelfSubjectAccessReview{
+						Status: authorizationv1.SubjectAccessReviewStatus{
+							Allowed: allowed,
+						},
+					}, nil
+				})
+			},
+			expectedOutcomes: map[string]PermissionCheckOutcome{
+				"services/get":   OK,
+				"services/list":  OK,
+				"services/watch": OK,
+				"pods/get":       ERROR,
+				"pods/list":      ERROR,
+				"pods/watch":     ERROR,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := testclient.NewSimpleClientset()
+			tt.setupReactions(fakeClient)
+
+			result := checkPermissions(fakeClient)
+
+			assert.NotNil(t, result)
+			assert.Equal(t, len(tt.expectedOutcomes), len(result.Permissions))
+
+			for permission, expectedOutcome := range tt.expectedOutcomes {
+				actualOutcome, exists := result.Permissions[permission]
+				assert.True(t, exists, "Expected permission %s to exist", permission)
+				assert.Equal(t, expectedOutcome, actualOutcome, "Permission %s outcome mismatch", permission)
+			}
 		})
 	}
 }

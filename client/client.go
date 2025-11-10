@@ -36,7 +36,11 @@ type Client struct {
 
 func PrepareClient(stopCh <-chan struct{}) *Client {
 	clientset := createClientset()
-	checkPermissions(clientset)
+	result := checkPermissions(clientset)
+	if result.HasErrors() {
+		log.Fatal().Msg("Required permissions are missing. Exit now.")
+	}
+
 	return CreateClient(clientset, stopCh)
 }
 
