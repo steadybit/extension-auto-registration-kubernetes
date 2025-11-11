@@ -127,15 +127,18 @@ func (c *Client) WatchPods(add func(pod *corev1.Pod), update func(old *corev1.Po
 	if _, err := c.pod.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			pod := obj.(*corev1.Pod)
+			log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("k8s pod added")
 			add(pod)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldPod := oldObj.(*corev1.Pod)
 			newPod := newObj.(*corev1.Pod)
+			log.Trace().Str("pod", newPod.Name).Str("namespace", newPod.Namespace).Msg("k8s pod updated")
 			update(oldPod, newPod)
 		},
 		DeleteFunc: func(obj interface{}) {
 			pod := obj.(*corev1.Pod)
+			log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("k8s pod deleted")
 			delete(pod)
 		},
 	}); err != nil {
@@ -143,28 +146,79 @@ func (c *Client) WatchPods(add func(pod *corev1.Pod), update func(old *corev1.Po
 	}
 }
 
+func (c *Client) WatchServices(add func(service *corev1.Service), update func(old *corev1.Service, new *corev1.Service), delete func(service *corev1.Service)) {
+	if _, err := c.service.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			service := obj.(*corev1.Service)
+			log.Trace().Str("service", service.Name).Str("namespace", service.Namespace).Msg("k8s service added")
+			add(service)
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			oldService := oldObj.(*corev1.Service)
+			newService := newObj.(*corev1.Service)
+			log.Trace().Str("service", newService.Name).Str("namespace", newService.Namespace).Msg("k8s service updated")
+			update(oldService, newService)
+		},
+		DeleteFunc: func(obj interface{}) {
+			service := obj.(*corev1.Service)
+			log.Trace().Str("service", service.Name).Str("namespace", service.Namespace).Msg("k8s service deleted")
+			delete(service)
+		},
+	}); err != nil {
+		log.Fatal().Msg("failed to add service event handler")
+	}
+}
+
 func (c *Client) ServicesByPod(pod *corev1.Pod) []*corev1.Service {
 	services, err := c.service.lister.Services(pod.Namespace).List(labels.Everything())
 	if err != nil {
-		log.Error().Err(err).Msgf("Error while fetching services")
+		log.Error().Err(err).Msg("Error while fetching services")
 		return []*corev1.Service{}
 	}
+
+	podLabels := labels.Set(pod.Labels)
 	var result []*corev1.Service
+
 	for _, service := range services {
-		match := service.Spec.Selector != nil
-		for key, value := range service.Spec.Selector {
-			if value != pod.ObjectMeta.Labels[key] {
-				match = false
-			}
+		if len(service.Spec.Selector) == 0 {
+			continue
 		}
-		if match {
+
+		selector := labels.SelectorFromSet(service.Spec.Selector)
+		if selector.Matches(podLabels) {
 			result = append(result, service)
 		}
 	}
 	return result
 }
 
+func (c *Client) PodsByService(service *corev1.Service) []*corev1.Pod {
+	pods, err := c.pod.lister.Pods(service.Namespace).List(labels.Everything())
+	if err != nil {
+		log.Error().Err(err).Msg("Error while fetching pods")
+		return []*corev1.Pod{}
+	}
+
+	if len(service.Spec.Selector) == 0 {
+		return []*corev1.Pod{}
+	}
+
+	selector := labels.SelectorFromSet(service.Spec.Selector)
+	var result []*corev1.Pod
+
+	for _, pod := range pods {
+		if selector.Matches(labels.Set(pod.Labels)) {
+			result = append(result, pod)
+		}
+	}
+	return result
+}
+
 func (c *Client) IsPodRunningAndReady(pod *corev1.Pod) bool {
+	if pod == nil {
+		return false
+	}
+
 	if pod.Status.Phase != corev1.PodRunning {
 		return false
 	}

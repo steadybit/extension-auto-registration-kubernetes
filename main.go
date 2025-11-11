@@ -2,7 +2,6 @@ package main
 
 import (
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -35,7 +34,7 @@ func main() {
 	//Sleep before first discovery to give the agent time to start
 	log.Info().Float64("seconds", config.Config.AgentRegistrationInitialDelay.Seconds()).Msg("Initial delay before starting the discovery.")
 	time.Sleep(config.Config.AgentRegistrationInitialDelay)
-	autoregistration.UpdateAgentExtensions(httpClientAgent, k8sClient, &sync.Map{})
+	autoregistration.UpdateAgentExtensions(httpClientAgent, k8sClient)
 
 	// Wait indefinitely
 	select {}

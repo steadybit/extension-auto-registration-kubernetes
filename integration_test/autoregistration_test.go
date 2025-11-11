@@ -2,7 +2,6 @@ package autoregistration
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -18,169 +17,213 @@ import (
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
 
-func TestAutoRegistration_should_add_pods(t *testing.T) {
-	discoveredExtensions := &sync.Map{}
+type TestSupport struct {
+	addPod           func(*corev1.Pod)
+	deletePod        func(*corev1.Pod)
+	updatePod        func(*corev1.Pod)
+	addService       func(*corev1.Service)
+	deleteService    func(*corev1.Service)
+	updateService    func(*corev1.Service)
+	getRegistrations func() (added []string, removed []string)
+}
+
+func TestAutoRegistration_should_register_extensions(t *testing.T) {
 	type args struct {
-		pod                *corev1.Pod
-		service            *corev1.Service
 		matchLabels        config.Labels
 		matchLabelsExclude config.Labels
 	}
 	tests := []struct {
-		name                       string
-		args                       args
-		assertDiscoveredExtensions func(t *testing.T)
-		assertAgentRegistrations   func(t *testing.T)
+		name string
+		args args
+		test func(t *testing.T, ts TestSupport)
 	}{
 		{
 			name: "should add daemonset pod without service",
-			args: args{
-				pod: getTestPod(nil),
-			},
-			assertDiscoveredExtensions: func(t *testing.T) {
-				value, ok := discoveredExtensions.Load("default/test-pod")
-				assert.True(t, ok, "Pod should be added to discoveredExtensions")
-				extensions := value.([]autoregistration.ExtensionConfigAO)
-				assert.Equal(t, 1, len(extensions), "There should be one extension registered")
-				assert.Equal(t, "http://192.168.1.1:8080", extensions[0].Url, "Extension URL should match")
-			},
-			assertAgentRegistrations: func(t *testing.T) {
-				assert.Len(t, AddedExtensions, 1, "There should be one added extension.")
-				assert.Equal(t, "{\"url\":\"http://192.168.1.1:8080\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\"},\"restrictedIps\":[\"192.168.1.1\"]}", AddedExtensions[0])
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(nil))
+				added, _ := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should be one added extension.")
+				assert.Equal(t, "{\"url\":\"http://192.168.1.1:8080\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\"},\"restrictedIps\":[\"192.168.1.1\"]}", added[0])
 			},
 		},
 		{
 			name: "should add daemonset pod without service via deprecated annotation",
-			args: args{
-				pod: getTestPod(func(p *corev1.Pod) {
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
 					p.ObjectMeta.Annotations = map[string]string{
 						"steadybit.com/extension-auto-discovery": `{"extensions":[{"port":8080,"protocol":"http"}]}`,
 					}
-				}),
-			},
-			assertDiscoveredExtensions: func(t *testing.T) {
-				value, ok := discoveredExtensions.Load("default/test-pod")
-				assert.True(t, ok, "Pod should be added to discoveredExtensions")
-				extensions := value.([]autoregistration.ExtensionConfigAO)
-				assert.Equal(t, 1, len(extensions), "There should be one extension registered")
-				assert.Equal(t, "http://192.168.1.1:8080", extensions[0].Url, "Extension URL should match")
-			},
-			assertAgentRegistrations: func(t *testing.T) {
-				assert.Len(t, AddedExtensions, 1, "There should be one added extension.")
-				assert.Equal(t, "{\"url\":\"http://192.168.1.1:8080\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\"},\"restrictedIps\":[\"192.168.1.1\"]}", AddedExtensions[0])
+				}))
+				added, _ := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should be one added extension.")
+				assert.Equal(t, "{\"url\":\"http://192.168.1.1:8080\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\"},\"restrictedIps\":[\"192.168.1.1\"]}", added[0])
 			},
 		},
 		{
-			name: "should add deployment pod with service",
-			args: args{
-				pod: getTestPod(func(p *corev1.Pod) {
+			name: "should add deployment pod for existing service",
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addService(getTestService(nil))
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
 					p.ObjectMeta.Annotations = map[string]string{}
-				}),
-				service: &corev1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-service",
-						Namespace: "default",
-						Annotations: map[string]string{
-							"steadybit.com/extension-auto-registration": `{"extensions":[{"port":8085,"protocol":"http"}]}`,
-						},
-					},
-					Spec: corev1.ServiceSpec{
-						Selector: map[string]string{
-							"app": "extension-xyz",
-						},
-						Ports: []corev1.ServicePort{
-							{
-								Port: 8085,
-							},
-						},
-					},
-					Status: corev1.ServiceStatus{
-						LoadBalancer: corev1.LoadBalancerStatus{
-							Ingress: []corev1.LoadBalancerIngress{
-								{
-									IP: "555.555.555.555",
-								},
-							},
-						},
-					},
-				},
+				}))
+				added, _ := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should be one added extension.")
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
 			},
-			assertDiscoveredExtensions: func(t *testing.T) {
-				value, ok := discoveredExtensions.Load("default/test-pod")
-				assert.True(t, ok, "Pod should be added to discoveredExtensions")
-				extensions := value.([]autoregistration.ExtensionConfigAO)
-				assert.Equal(t, 1, len(extensions), "There should be one extension registered")
-				assert.Equal(t, "http://test-service.default.svc.cluster.local:8085", extensions[0].Url, "Extension URL should match")
+		},
+		{
+			name: "should add deployment pod when service is created after pod",
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
+					p.ObjectMeta.Annotations = map[string]string{}
+				}))
+				ts.addService(getTestService(nil))
+				added, _ := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should be one added extension.")
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
 			},
-			assertAgentRegistrations: func(t *testing.T) {
-				assert.Len(t, AddedExtensions, 1, "There should be one added extension.")
-				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", AddedExtensions[0])
+		},
+		{
+			name: "should remove registration when pod is deleted",
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(nil))
+				added, _ := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should be one added extension.")
+				assert.Equal(t, "{\"url\":\"http://192.168.1.1:8080\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\"},\"restrictedIps\":[\"192.168.1.1\"]}", added[0])
+				ts.deletePod(getTestPod(nil))
+				added, removed := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should still only be one added extension.")
+				assert.Len(t, removed, 1, "There should be one removed extension.")
+				assert.Equal(t, "{\"url\":\"http://192.168.1.1:8080\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\"},\"restrictedIps\":[\"192.168.1.1\"]}", removed[0])
+			},
+		},
+		{
+			name: "should remove registration when daemonset pod is updated and annotations are removed",
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(nil))
+				added, _ := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should be one added extension.")
+				assert.Equal(t, "{\"url\":\"http://192.168.1.1:8080\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\"},\"restrictedIps\":[\"192.168.1.1\"]}", added[0])
+				ts.updatePod(getTestPod(func(p *corev1.Pod) {
+					p.ObjectMeta.Annotations = map[string]string{}
+				}))
+				added, removed := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should still only be one added extension.")
+				assert.Len(t, removed, 1, "There should be one removed extension.")
+				assert.Equal(t, "{\"url\":\"http://192.168.1.1:8080\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\"},\"restrictedIps\":[\"192.168.1.1\"]}", removed[0])
+			},
+		},
+		{
+			name: "should add registration when daemonset pod is updated and annotations are added",
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
+					p.ObjectMeta.Annotations = map[string]string{}
+				}))
+				added, _ := ts.getRegistrations()
+				assert.Empty(t, added, "Nothing should be registered")
+				ts.updatePod(getTestPod(nil))
+				added, removed := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should be one added extension.")
+				assert.Equal(t, "{\"url\":\"http://192.168.1.1:8080\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\"},\"restrictedIps\":[\"192.168.1.1\"]}", added[0])
+				assert.Empty(t, removed, "Nothing should be removed")
+			},
+		},
+		{
+			name: "should remove registration when service is deleted",
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addService(getTestService(nil))
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
+					p.ObjectMeta.Annotations = map[string]string{}
+				}))
+				added, _ := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should be one added extension.")
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
+				ts.deleteService(getTestService(nil))
+				added, removed := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should still only be one added extension.")
+				assert.Len(t, removed, 1, "There should be one removed extension.")
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", removed[0])
+			},
+		},
+		{
+			name: "should remove registration when service is updated and annotations are removed",
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addService(getTestService(nil))
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
+					p.ObjectMeta.Annotations = map[string]string{}
+				}))
+				added, _ := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should be one added extension.")
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
+				ts.updateService(getTestService(func(p *corev1.Service) {
+					p.ObjectMeta.Annotations = map[string]string{}
+				}))
+				added, removed := ts.getRegistrations()
+				assert.Len(t, added, 1, "There should still only be one added extension.")
+				assert.Len(t, removed, 1, "There should be one removed extension.")
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
+			},
+		},
+		{
+			name: "should add registration when service is updated and annotations are added",
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addService(getTestService(func(p *corev1.Service) {
+					p.ObjectMeta.Annotations = map[string]string{}
+				}))
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
+					p.ObjectMeta.Annotations = map[string]string{}
+				}))
+				added, _ := ts.getRegistrations()
+				assert.Empty(t, added, "Nothing should be registered")
+				ts.updateService(getTestService(nil))
+				added, _ = ts.getRegistrations()
+				assert.Len(t, added, 1, "There should be one added extension.")
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
 			},
 		},
 		{
 			name: "should ignore pod without annotations",
-			args: args{
-				pod: getTestPod(func(p *corev1.Pod) {
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
 					p.ObjectMeta.Annotations = map[string]string{}
-				}),
-			},
-			assertDiscoveredExtensions: func(t *testing.T) {
-				_, ok := discoveredExtensions.Load("default/test-pod")
-				assert.False(t, ok, "Nothing should not be added to discoveredExtensions")
-			},
-			assertAgentRegistrations: func(t *testing.T) {
-				assert.Empty(t, AddedExtensions, "Nothing should be registered")
+				}))
+				added, _ := ts.getRegistrations()
+				assert.Empty(t, added, "Nothing should be registered")
 			},
 		},
 		{
 			name: "should ignore pod without ip",
-			args: args{
-				pod: getTestPod(func(p *corev1.Pod) {
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
 					p.Status.PodIP = ""
-				}),
-			},
-			assertDiscoveredExtensions: func(t *testing.T) {
-				_, ok := discoveredExtensions.Load("default/test-pod")
-				assert.False(t, ok, "Nothing should not be added to discoveredExtensions")
-			},
-			assertAgentRegistrations: func(t *testing.T) {
-				assert.Empty(t, AddedExtensions, "Nothing should be registered")
+				}))
+				added, _ := ts.getRegistrations()
+				assert.Empty(t, added, "Nothing should be registered")
 			},
 		},
 		{
 			name: "should ignore not running pod",
-			args: args{
-				pod: getTestPod(func(p *corev1.Pod) {
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
 					p.Status.Phase = "Pending"
-				}),
-			},
-			assertDiscoveredExtensions: func(t *testing.T) {
-				_, ok := discoveredExtensions.Load("default/test-pod")
-				assert.False(t, ok, "Nothing should not be added to discoveredExtensions")
-			},
-			assertAgentRegistrations: func(t *testing.T) {
-				assert.Empty(t, AddedExtensions, "Nothing should be registered")
+				}))
+				added, _ := ts.getRegistrations()
+				assert.Empty(t, added, "Nothing should be registered")
 			},
 		},
 		{
 			name: "should ignore not ready pod",
-			args: args{
-				pod: getTestPod(func(p *corev1.Pod) {
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
 					p.Status.Conditions = []corev1.PodCondition{}
-				}),
-			},
-			assertDiscoveredExtensions: func(t *testing.T) {
-				_, ok := discoveredExtensions.Load("default/test-pod")
-				assert.False(t, ok, "Nothing should not be added to discoveredExtensions")
-			},
-			assertAgentRegistrations: func(t *testing.T) {
-				assert.Empty(t, AddedExtensions, "Nothing should be registered")
+				}))
+				added, _ := ts.getRegistrations()
+				assert.Empty(t, added, "Nothing should be registered")
 			},
 		},
 		{
 			name: "should ignore pod not matching matchLabels",
 			args: args{
-				pod: getTestPod(nil),
 				matchLabels: config.Labels{
 					{
 						Key:   "app",
@@ -188,18 +231,15 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 					},
 				},
 			},
-			assertDiscoveredExtensions: func(t *testing.T) {
-				_, ok := discoveredExtensions.Load("default/test-pod")
-				assert.False(t, ok, "Nothing should not be added to discoveredExtensions")
-			},
-			assertAgentRegistrations: func(t *testing.T) {
-				assert.Empty(t, AddedExtensions, "Nothing should be registered")
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(nil))
+				added, _ := ts.getRegistrations()
+				assert.Empty(t, added, "Nothing should be registered")
 			},
 		},
 		{
 			name: "should ignore pod matching matchLabelsExclude",
 			args: args{
-				pod: getTestPod(nil),
 				matchLabelsExclude: config.Labels{
 					{
 						Key:   "app",
@@ -207,12 +247,10 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 					},
 				},
 			},
-			assertDiscoveredExtensions: func(t *testing.T) {
-				_, ok := discoveredExtensions.Load("default/test-pod")
-				assert.False(t, ok, "Nothing should not be added to discoveredExtensions")
-			},
-			assertAgentRegistrations: func(t *testing.T) {
-				assert.Empty(t, AddedExtensions, "Nothing should be registered")
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addPod(getTestPod(nil))
+				added, _ := ts.getRegistrations()
+				assert.Empty(t, added, "Nothing should be registered")
 			},
 		},
 	}
@@ -225,31 +263,59 @@ func TestAutoRegistration_should_add_pods(t *testing.T) {
 
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-			discoveredExtensions.Clear()
 			k8sclient, k8stestclient := getTestClient(stopCh)
 
 			config.Config.AgentRegistrationInterval = 1 * time.Second
 			config.Config.AgentRegistrationIntervalAfterError = 1 * time.Second
 			config.Config.MatchLabels = tt.args.matchLabels
 			config.Config.MatchLabelsExclude = tt.args.matchLabelsExclude
-			registrator := autoregistration.UpdateAgentExtensions(httpClient, k8sclient, discoveredExtensions)
+			registrator := autoregistration.UpdateAgentExtensions(httpClient, k8sclient)
 
-			if tt.args.service != nil {
-				_, err := k8stestclient.CoreV1().Services(tt.args.service.Namespace).Create(context.Background(), tt.args.service, metav1.CreateOptions{})
-				assert.NoError(t, err, "Service creation should succeed")
-				time.Sleep(100 * time.Millisecond)
-			}
-			if tt.args.pod != nil {
-				_, err := k8stestclient.CoreV1().Pods(tt.args.pod.Namespace).Create(context.Background(), tt.args.pod, metav1.CreateOptions{})
-				assert.NoError(t, err, "Pod creation should succeed")
-				time.Sleep(100 * time.Millisecond)
-			}
-			waitUntilSynched(t, registrator)
-
-			tt.assertDiscoveredExtensions(t)
-			MU.RLock()
-			tt.assertAgentRegistrations(t)
-			MU.RUnlock()
+			tt.test(t, TestSupport{
+				addPod: func(pod *corev1.Pod) {
+					_, err := k8stestclient.CoreV1().Pods(pod.Namespace).Create(context.Background(), pod, metav1.CreateOptions{})
+					assert.NoError(t, err, "Pod creation should succeed")
+					time.Sleep(100 * time.Millisecond)
+					waitUntilSynched(t, registrator)
+				},
+				deletePod: func(pod *corev1.Pod) {
+					err := k8stestclient.CoreV1().Pods(pod.Namespace).Delete(context.Background(), pod.Name, metav1.DeleteOptions{})
+					assert.NoError(t, err, "Pod deletion should succeed")
+					time.Sleep(100 * time.Millisecond)
+					waitUntilSynched(t, registrator)
+				},
+				updatePod: func(pod *corev1.Pod) {
+					_, err := k8stestclient.CoreV1().Pods(pod.Namespace).Update(context.Background(), pod, metav1.UpdateOptions{})
+					assert.NoError(t, err, "Pod update should succeed")
+					time.Sleep(100 * time.Millisecond)
+					waitUntilSynched(t, registrator)
+				},
+				addService: func(svc *corev1.Service) {
+					_, err := k8stestclient.CoreV1().Services(svc.Namespace).Create(context.Background(), svc, metav1.CreateOptions{})
+					assert.NoError(t, err, "Service creation should succeed")
+					time.Sleep(100 * time.Millisecond)
+					waitUntilSynched(t, registrator)
+				},
+				deleteService: func(svc *corev1.Service) {
+					err := k8stestclient.CoreV1().Services(svc.Namespace).Delete(context.Background(), svc.Name, metav1.DeleteOptions{})
+					assert.NoError(t, err, "Service deletion should succeed")
+					time.Sleep(100 * time.Millisecond)
+					waitUntilSynched(t, registrator)
+				},
+				updateService: func(svc *corev1.Service) {
+					_, err := k8stestclient.CoreV1().Services(svc.Namespace).Update(context.Background(), svc, metav1.UpdateOptions{})
+					assert.NoError(t, err, "Service update should succeed")
+					time.Sleep(100 * time.Millisecond)
+					waitUntilSynched(t, registrator)
+				},
+				getRegistrations: func() (added []string, removed []string) {
+					MU.RLock()
+					defer MU.RUnlock()
+					added = AddedExtensions
+					removed = RemovedExtensions
+					return
+				},
+			})
 		})
 	}
 }
@@ -319,6 +385,41 @@ func getTestPod(modifier func(p *corev1.Pod)) *corev1.Pod {
 		modifier(&newPod)
 	}
 	return &newPod
+}
+
+func getTestService(modifier func(p *corev1.Service)) *corev1.Service {
+	newService := corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: "default",
+			Annotations: map[string]string{
+				"steadybit.com/extension-auto-registration": `{"extensions":[{"port":8085,"protocol":"http"}]}`,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app": "extension-xyz",
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Port: 8085,
+				},
+			},
+		},
+		Status: corev1.ServiceStatus{
+			LoadBalancer: corev1.LoadBalancerStatus{
+				Ingress: []corev1.LoadBalancerIngress{
+					{
+						IP: "555.555.555.555",
+					},
+				},
+			},
+		},
+	}
+	if modifier != nil {
+		modifier(&newService)
+	}
+	return &newService
 }
 
 func getTestClient(stopCh <-chan struct{}) (*client.Client, kubernetes.Interface) {
