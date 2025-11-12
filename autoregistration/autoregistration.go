@@ -51,8 +51,8 @@ func (r *AutoRegistration) IsDirty() bool {
 func (r *AutoRegistration) processAddedPod(pod *corev1.Pod) {
 	extensions := r.toExtensionConfigs(pod)
 	if len(extensions) > 0 {
+		log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(extensions)).Msg("Pod added / extensions found.")
 		r.discoveredExtensions.Store(r.key(pod), extensions)
-		log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(extensions)).Msg("Adding extension registration.")
 		r.isDirty.Store(true)
 	}
 }
@@ -61,13 +61,13 @@ func (r *AutoRegistration) processUpdatedPod(_ *corev1.Pod, new *corev1.Pod) {
 	extensions := r.toExtensionConfigs(new)
 	if len(extensions) > 0 {
 		r.discoveredExtensions.Store(r.key(new), extensions)
-		log.Debug().Str("pod", new.Name).Str("namespace", new.Namespace).Int("count", len(extensions)).Msg("Adding extension registration.")
+		log.Debug().Str("pod", new.Name).Str("namespace", new.Namespace).Int("count", len(extensions)).Msg("Pod updated / extensions found.")
 		r.isDirty.Store(true)
 	} else {
 		value, loaded := r.discoveredExtensions.LoadAndDelete(r.key(new))
 		if loaded {
 			v := value.([]ExtensionConfigAO)
-			log.Debug().Str("pod", new.Name).Str("namespace", new.Namespace).Int("count", len(v)).Msg("Remove extension registration.")
+			log.Debug().Str("pod", new.Name).Str("namespace", new.Namespace).Int("count", len(v)).Msg("Pod updated / no extensions found anymore.")
 			r.isDirty.Store(true)
 		}
 	}
@@ -77,7 +77,7 @@ func (r *AutoRegistration) processDeletedPod(pod *corev1.Pod) {
 	value, loaded := r.discoveredExtensions.LoadAndDelete(r.key(pod))
 	if loaded {
 		v := value.([]ExtensionConfigAO)
-		log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(v)).Msg("Remove extension registration.")
+		log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(v)).Msg("Pod deleted / extension will be deregistered.")
 		r.isDirty.Store(true)
 	}
 }
@@ -123,7 +123,6 @@ func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []ExtensionConfig
 		log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("Exclude candidate because it is not running and ready.")
 		return result
 	}
-
 	if len(r.matchLabels) != 0 && !workloadMatchesSelector(pod.Labels, r.matchLabels) {
 		log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("Exclude candidate because it does not match matchLabels.")
 		return result
@@ -154,7 +153,7 @@ func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []ExtensionConfig
 		}
 	} else {
 		for _, service := range r.k8sClient.ServicesByPod(pod) {
-			log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Str("service", service.Name).Msg("Found service for pod.")
+			log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Str("service", service.Name).Msg("Found service for pod.")
 			serviceAnnotations := r.getExtensionAnnotations(service.Annotations)
 			if len(serviceAnnotations) > 0 {
 				restrictedPorts := make(map[int]string)
