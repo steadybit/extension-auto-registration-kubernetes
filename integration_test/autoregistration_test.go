@@ -47,19 +47,6 @@ func TestAutoRegistration_should_register_extensions(t *testing.T) {
 			},
 		},
 		{
-			name: "should add daemonset pod without service via deprecated annotation",
-			test: func(t *testing.T, ts TestSupport) {
-				ts.addPod(getTestPod(func(p *corev1.Pod) {
-					p.ObjectMeta.Annotations = map[string]string{
-						"steadybit.com/extension-auto-discovery": `{"extensions":[{"port":8080,"protocol":"http"}]}`,
-					}
-				}))
-				added, _ := ts.getRegistrations()
-				assert.Len(t, added, 1, "There should be one added extension.")
-				assert.Equal(t, "{\"url\":\"http://192.168.1.1:8080\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\"},\"restrictedIps\":[\"192.168.1.1\"]}", added[0])
-			},
-		},
-		{
 			name: "should add deployment pod for existing service",
 			test: func(t *testing.T, ts TestSupport) {
 				ts.addService(getTestService(nil))

@@ -192,11 +192,8 @@ func (r *AutoRegistration) getExtensionAnnotations(annotations map[string]string
 	if annotations == nil {
 		return []ExtensionAnnotation{}
 	}
-	keys := []string{"steadybit.com/extension-auto-registration", "steadybit.com/extension-auto-discovery"}
-	for _, key := range keys {
-		if val, ok := annotations[key]; ok {
-			return r.parseAnnotationJSON(val)
-		}
+	if val, ok := annotations["steadybit.com/extension-auto-registration"]; ok {
+		return r.parseAnnotationJSON(val)
 	}
 	return []ExtensionAnnotation{}
 }
