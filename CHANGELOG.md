@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.3
+
+- Update dependencies
+
 ## v0.0.2
 
 - removed support for deprecated `steadybit.com/extension-auto-discovery` annotations
