@@ -9,7 +9,7 @@ require (
 	github.com/steadybit/extension-kit v1.10.1
 	github.com/stretchr/testify v1.11.1
 	k8s.io/api v0.34.2
-	k8s.io/apimachinery v0.34.2
+	k8s.io/apimachinery v0.34.3
 	k8s.io/client-go v0.34.2
 	k8s.io/klog/v2 v2.130.1
 )
