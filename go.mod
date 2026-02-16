@@ -3,7 +3,7 @@ module github.com/steadybit/extension-auto-registration-kubernetes
 go 1.25.7
 
 require (
-	github.com/go-resty/resty/v2 v2.17.1
+	github.com/go-resty/resty/v2 v2.17.2
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/rs/zerolog v1.34.0
 	github.com/steadybit/extension-kit v1.10.2
