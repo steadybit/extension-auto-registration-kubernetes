@@ -6,7 +6,7 @@ require (
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/rs/zerolog v1.34.0
-	github.com/steadybit/extension-kit v1.10.2
+	github.com/steadybit/extension-kit v1.10.3
 	github.com/stretchr/testify v1.11.1
 	k8s.io/api v0.35.2
 	k8s.io/apimachinery v0.35.2
