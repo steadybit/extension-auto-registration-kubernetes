@@ -8,8 +8,8 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/steadybit/extension-kit v1.10.3
 	github.com/stretchr/testify v1.11.1
-	k8s.io/api v0.35.2
-	k8s.io/apimachinery v0.35.2
+	k8s.io/api v0.35.3
+	k8s.io/apimachinery v0.35.3
 	k8s.io/client-go v0.35.2
 	k8s.io/klog/v2 v2.140.0
 )
