@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.4
+
+- build(deps): bump k8s.io/api from 0.36.0 to 0.36.1
+- build(deps): bump k8s.io/apimachinery from 0.36.0 to 0.36.1
+- build(deps): bump k8s.io/client-go from 0.36.0 to 0.36.1
+- chore: update dependencies
+- feat: add weekly auto patch-release workflow
+
 ## v1.0.3
 
 - Bump Go to 1.26.3
