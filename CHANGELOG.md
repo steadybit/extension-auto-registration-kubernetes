@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.5
+
+- build(deps): bump alpine from 3.23 to 3.24
+- build(deps): bump k8s.io/client-go from 0.36.1 to 0.36.2
+
 ## v1.0.4
 
 - build(deps): bump k8s.io/api from 0.36.0 to 0.36.1
