@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.6
+
+- build(deps): bump github.com/steadybit/extension-kit
+- build: rename workflow_dispatch input labels for the GH UI
+
 ## v1.0.5
 
 - build(deps): bump alpine from 3.23 to 3.24
