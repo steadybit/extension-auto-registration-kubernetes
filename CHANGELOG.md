@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.7
+
+- build(deps): bump github.com/steadybit/extension-kit
+
 ## v1.0.6
 
 - build(deps): bump github.com/steadybit/extension-kit
