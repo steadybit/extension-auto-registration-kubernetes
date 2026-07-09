@@ -3,7 +3,9 @@ package autoregistration
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -167,6 +169,7 @@ func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []ExtensionConfig
 						restrictedIps = append(restrictedIps, ingress.IP)
 					}
 				}
+				restrictedIps = append(restrictedIps, clusterIPsOfService(service)...)
 				if pod.Status.PodIP != "" {
 					restrictedIps = append(restrictedIps, pod.Status.PodIP)
 				}
@@ -186,6 +189,20 @@ func (r *AutoRegistration) toExtensionConfigs(pod *corev1.Pod) []ExtensionConfig
 		}
 	}
 	return result
+}
+
+// clusterIPsOfService returns the stable cluster IPs of the service. The agent uses them - besides the pod IPs - to exclude the
+// agent-to-extension communication from network attacks and as DNS-independent fallback addresses.
+func clusterIPsOfService(service *corev1.Service) []string {
+	candidates := append([]string{service.Spec.ClusterIP}, service.Spec.ClusterIPs...)
+	clusterIPs := make([]string, 0, len(candidates))
+	for _, ip := range candidates {
+		// "None" marks a headless service without a cluster IP
+		if ip != "" && !strings.EqualFold(ip, "None") && !slices.Contains(clusterIPs, ip) {
+			clusterIPs = append(clusterIPs, ip)
+		}
+	}
+	return clusterIPs
 }
 
 func (r *AutoRegistration) getExtensionAnnotations(annotations map[string]string) []ExtensionAnnotation {
