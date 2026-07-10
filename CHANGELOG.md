@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.8
+
+- feat: register service cluster IPs as restricted IPs
+
 ## v1.0.7
 
 - build(deps): bump github.com/steadybit/extension-kit
