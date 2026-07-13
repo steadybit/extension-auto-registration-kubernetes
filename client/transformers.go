@@ -5,7 +5,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func transformPod(i interface{}) (interface{}, error) {
+func transformPod(i any) (any, error) {
 	//pod.Status.Phase
 	//pod.Status.Conditions
 	//pod.Status.PodIP
@@ -42,7 +42,7 @@ func transformPod(i interface{}) (interface{}, error) {
 	return i, nil
 }
 
-func transformService(i interface{}) (interface{}, error) {
+func transformService(i any) (any, error) {
 	//service.Extensions
 	//service.Name
 	//service.Namespace

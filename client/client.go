@@ -125,18 +125,18 @@ func CreateClient(clientset kubernetes.Interface, stopCh <-chan struct{}) *Clien
 
 func (c *Client) WatchPods(add func(pod *corev1.Pod), update func(old *corev1.Pod, new *corev1.Pod), delete func(pod *corev1.Pod)) {
 	if _, err := c.pod.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
+		AddFunc: func(obj any) {
 			pod := obj.(*corev1.Pod)
 			log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("k8s pod added")
 			add(pod)
 		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
+		UpdateFunc: func(oldObj, newObj any) {
 			oldPod := oldObj.(*corev1.Pod)
 			newPod := newObj.(*corev1.Pod)
 			log.Trace().Str("pod", newPod.Name).Str("namespace", newPod.Namespace).Msg("k8s pod updated")
 			update(oldPod, newPod)
 		},
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 			pod := obj.(*corev1.Pod)
 			log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("k8s pod deleted")
 			delete(pod)
@@ -148,18 +148,18 @@ func (c *Client) WatchPods(add func(pod *corev1.Pod), update func(old *corev1.Po
 
 func (c *Client) WatchServices(add func(service *corev1.Service), update func(old *corev1.Service, new *corev1.Service), delete func(service *corev1.Service)) {
 	if _, err := c.service.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
+		AddFunc: func(obj any) {
 			service := obj.(*corev1.Service)
 			log.Trace().Str("service", service.Name).Str("namespace", service.Namespace).Msg("k8s service added")
 			add(service)
 		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
+		UpdateFunc: func(oldObj, newObj any) {
 			oldService := oldObj.(*corev1.Service)
 			newService := newObj.(*corev1.Service)
 			log.Trace().Str("service", newService.Name).Str("namespace", newService.Namespace).Msg("k8s service updated")
 			update(oldService, newService)
 		},
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 			service := obj.(*corev1.Service)
 			log.Trace().Str("service", service.Name).Str("namespace", service.Namespace).Msg("k8s service deleted")
 			delete(service)

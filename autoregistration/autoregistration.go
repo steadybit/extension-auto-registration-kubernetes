@@ -3,6 +3,7 @@ package autoregistration
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -294,7 +295,5 @@ func (r *AutoRegistration) syncRegistrations() {
 }
 
 func mergeMaps(dest, src map[int]string) {
-	for key, value := range src {
-		dest[key] = value
-	}
+	maps.Copy(dest, src)
 }
