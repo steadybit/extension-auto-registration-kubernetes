@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.9
+
+- chore: update Go to 1.26.5
+- refactor: apply go fix modernizations
+
 ## v1.0.8
 
 - feat: register service cluster IPs as restricted IPs
