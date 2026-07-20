@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.10
+
+- ci: skip build on .trivyignore.yml-only changes [skip ci]
+
 ## v1.0.9
 
 - chore: update Go to 1.26.5
