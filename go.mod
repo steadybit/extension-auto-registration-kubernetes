@@ -6,7 +6,7 @@ require (
 	github.com/go-resty/resty/v2 v2.17.2
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/rs/zerolog v1.35.1
-	github.com/steadybit/extension-kit v1.10.8
+	github.com/steadybit/extension-kit v1.11.0
 	github.com/stretchr/testify v1.11.1
 	k8s.io/api v0.36.2
 	k8s.io/apimachinery v0.36.2
@@ -16,7 +16,7 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/elastic/go-sysinfo v1.15.4 // indirect
+	github.com/elastic/go-sysinfo v1.15.5 // indirect
 	github.com/elastic/go-windows v1.0.2 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
@@ -52,7 +52,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
