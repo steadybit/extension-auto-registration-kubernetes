@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.11
+
+- build(deps): bump github.com/steadybit/extension-kit
+- build(deps): bump k8s.io/api from 0.36.2 to 0.36.3
+- build(deps): bump k8s.io/apimachinery from 0.36.2 to 0.36.3
+- build(deps): bump k8s.io/client-go from 0.36.2 to 0.36.3
+
 ## v1.0.10
 
 - ci: skip build on .trivyignore.yml-only changes [skip ci]
