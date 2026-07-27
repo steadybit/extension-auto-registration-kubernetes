@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.12
+
+- chore(deps): update dependencies
+
 ## v1.0.11
 
 - build(deps): bump github.com/steadybit/extension-kit
