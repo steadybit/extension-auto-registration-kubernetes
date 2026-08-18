@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.14
+
+- chore(deps): bump steadybit kits and drop Go patch pin (#82)
+
 ## v1.0.13
 
 - build(deps): bump github.com/steadybit/extension-kit
