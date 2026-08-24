@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.15
+
+- build(deps): bump github.com/stretchr/testify from 1.11.1 to 1.12.1
+- build(deps): bump golang from 1.26-alpine to 1.27-alpine
+- build(deps): bump k8s.io/client-go from 0.36.3 to 0.36.4
+
 ## v1.0.14
 
 - chore(deps): bump steadybit kits and drop Go patch pin (#82)
