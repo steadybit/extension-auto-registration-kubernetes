@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.16
+
+- build(deps): bump k8s.io/client-go from 0.36.4 to 0.37.0
+
 ## v1.0.15
 
 - build(deps): bump github.com/stretchr/testify from 1.11.1 to 1.12.1
