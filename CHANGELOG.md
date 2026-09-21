@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.17
+
+- Add OpenTelemetry tracing support
+- Update dependencies
+
 ## v1.0.16
 
 - build(deps): bump k8s.io/client-go from 0.36.4 to 0.37.0
