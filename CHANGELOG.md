@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.18
+
+- build(deps): bump k8s.io/api from 0.37.0 to 0.37.1
+- build(deps): bump k8s.io/client-go from 0.37.0 to 0.37.1
+
 ## v1.0.17
 
 - Add OpenTelemetry tracing support
