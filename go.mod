@@ -10,7 +10,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	k8s.io/api v0.37.1
 	k8s.io/apimachinery v0.37.1
-	k8s.io/client-go v0.37.0
+	k8s.io/client-go v0.37.1
 	k8s.io/klog/v2 v2.140.0
 )
 
