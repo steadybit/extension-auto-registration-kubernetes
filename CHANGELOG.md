@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.19
+
+- chore(deps): bump golang.org/x/net to v0.61.0
+
 ## v1.0.18
 
 - build(deps): bump k8s.io/api from 0.37.0 to 0.37.1
