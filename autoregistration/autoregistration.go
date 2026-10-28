@@ -22,7 +22,8 @@ type AutoRegistration struct {
 	httpClient                          *resty.Client
 	k8sClient                           *client.Client
 	discoveredExtensions                *sync.Map
-	isDirty                             atomic.Bool
+	changes                             atomic.Uint64
+	syncedChanges                       atomic.Uint64
 	agentRegistrationInterval           time.Duration
 	agentRegistrationIntervalAfterError time.Duration
 	matchLabels                         config.Labels
@@ -38,7 +39,6 @@ func UpdateAgentExtensions(httpClient *resty.Client, k8sClient *client.Client) *
 		agentRegistrationIntervalAfterError: config.Config.AgentRegistrationIntervalAfterError,
 		matchLabels:                         config.Config.MatchLabels,
 		matchLabelsExclude:                  config.Config.MatchLabelsExclude,
-		isDirty:                             atomic.Bool{},
 	}
 
 	registrator.syncRegistrations()
@@ -47,8 +47,9 @@ func UpdateAgentExtensions(httpClient *resty.Client, k8sClient *client.Client) *
 	return &registrator
 }
 
+// IsDirty reports whether changes are not yet synced to the agent, including those of a sync still in progress.
 func (r *AutoRegistration) IsDirty() bool {
-	return r.isDirty.Load()
+	return r.changes.Load() != r.syncedChanges.Load()
 }
 
 func (r *AutoRegistration) processAddedPod(pod *corev1.Pod) {
@@ -56,7 +57,7 @@ func (r *AutoRegistration) processAddedPod(pod *corev1.Pod) {
 	if len(extensions) > 0 {
 		log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(extensions)).Msg("Pod added / extensions found.")
 		r.discoveredExtensions.Store(r.key(pod), extensions)
-		r.isDirty.Store(true)
+		r.changes.Add(1)
 	}
 }
 
@@ -65,13 +66,13 @@ func (r *AutoRegistration) processUpdatedPod(_ *corev1.Pod, new *corev1.Pod) {
 	if len(extensions) > 0 {
 		r.discoveredExtensions.Store(r.key(new), extensions)
 		log.Debug().Str("pod", new.Name).Str("namespace", new.Namespace).Int("count", len(extensions)).Msg("Pod updated / extensions found.")
-		r.isDirty.Store(true)
+		r.changes.Add(1)
 	} else {
 		value, loaded := r.discoveredExtensions.LoadAndDelete(r.key(new))
 		if loaded {
 			v := value.([]ExtensionConfigAO)
 			log.Debug().Str("pod", new.Name).Str("namespace", new.Namespace).Int("count", len(v)).Msg("Pod updated / no extensions found anymore.")
-			r.isDirty.Store(true)
+			r.changes.Add(1)
 		}
 	}
 }
@@ -81,7 +82,7 @@ func (r *AutoRegistration) processDeletedPod(pod *corev1.Pod) {
 	if loaded {
 		v := value.([]ExtensionConfigAO)
 		log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(v)).Msg("Pod deleted / extension will be deregistered.")
-		r.isDirty.Store(true)
+		r.changes.Add(1)
 	}
 }
 
@@ -264,7 +265,9 @@ func (r *AutoRegistration) containsValue(m map[int]string, value string) bool {
 }
 
 func (r *AutoRegistration) syncRegistrations() {
-	if !r.isDirty.Load() {
+	// read before collecting the discovered extensions, so changes made while syncing stay pending
+	changes := r.changes.Load()
+	if changes == r.syncedChanges.Load() {
 		time.AfterFunc(r.agentRegistrationInterval, r.syncRegistrations)
 		log.Trace().Msgf("No changes detected, waiting for %s before next check.", r.agentRegistrationInterval)
 		return
@@ -273,25 +276,51 @@ func (r *AutoRegistration) syncRegistrations() {
 	var errGet, errRemove, errAdd error
 	currentRegistrations, errGet := getCurrentRegistrations(r.httpClient)
 	if errGet == nil {
-		discoveredExtensions := make([]ExtensionConfigAO, 0)
+		extensionsByPod := make(map[string][]ExtensionConfigAO)
 		r.discoveredExtensions.Range(func(key, value any) bool {
-			v := value.([]ExtensionConfigAO)
-			discoveredExtensions = append(discoveredExtensions, v...)
+			extensionsByPod[key.(string)] = value.([]ExtensionConfigAO)
 			return true
 		})
-		r.isDirty.Store(false)
+		discoveredExtensions := mergeByUrl(extensionsByPod)
 		errRemove = removeMissingRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
 		errAdd = addNewRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
 	}
 
 	if (errGet != nil) || (errRemove != nil) || (errAdd != nil) {
-		r.isDirty.Store(true)
 		log.Info().Msgf("Retry in %s", r.agentRegistrationIntervalAfterError)
 		time.AfterFunc(r.agentRegistrationIntervalAfterError, r.syncRegistrations)
 	} else {
+		r.syncedChanges.Store(changes)
 		log.Debug().Msg("Registrations synced successfully.")
 		time.AfterFunc(r.agentRegistrationInterval, r.syncRegistrations)
 	}
+}
+
+// mergeByUrl combines the configs of all pods into one config per URL. The agent keeps a single registration per URL,
+// while a Service-based extension yields one config per ready pod - same URL, but restricted to that pod's IP. Registered
+// one by one, the agent's registration would flip to whichever pod was posted last on every pod event, and each flip makes
+// the agent re-register the extension and re-run all of its discoveries.
+func mergeByUrl(extensionsByPod map[string][]ExtensionConfigAO) []ExtensionConfigAO {
+	byUrl := make(map[string]*ExtensionConfigAO)
+	for _, podKey := range slices.Sorted(maps.Keys(extensionsByPod)) {
+		for _, extension := range extensionsByPod[podKey] {
+			merged, found := byUrl[extension.Url]
+			if !found {
+				merged = &ExtensionConfigAO{UnixSocket: extension.UnixSocket, Url: extension.Url, Types: extension.Types, RestrictedPorts: map[int]string{}}
+				byUrl[extension.Url] = merged
+			}
+			mergeMaps(merged.RestrictedPorts, extension.RestrictedPorts)
+			merged.RestrictedIps = append(merged.RestrictedIps, extension.RestrictedIps...)
+		}
+	}
+	result := make([]ExtensionConfigAO, 0, len(byUrl))
+	for _, url := range slices.Sorted(maps.Keys(byUrl)) {
+		merged := byUrl[url]
+		slices.Sort(merged.RestrictedIps)
+		merged.RestrictedIps = slices.Compact(merged.RestrictedIps)
+		result = append(result, *merged)
+	}
+	return result
 }
 
 func mergeMaps(dest, src map[int]string) {

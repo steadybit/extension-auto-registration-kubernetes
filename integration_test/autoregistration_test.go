@@ -2,6 +2,7 @@ package autoregistration
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -55,7 +56,7 @@ func TestAutoRegistration_should_register_extensions(t *testing.T) {
 				}))
 				added, _ := ts.getRegistrations()
 				assert.Len(t, added, 1, "There should be one added extension.")
-				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"192.168.1.1\",\"555.555.555.555\"]}", added[0])
 			},
 		},
 		{
@@ -67,7 +68,7 @@ func TestAutoRegistration_should_register_extensions(t *testing.T) {
 				ts.addService(getTestService(nil))
 				added, _ := ts.getRegistrations()
 				assert.Len(t, added, 1, "There should be one added extension.")
-				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"192.168.1.1\",\"555.555.555.555\"]}", added[0])
 			},
 		},
 		{
@@ -124,12 +125,12 @@ func TestAutoRegistration_should_register_extensions(t *testing.T) {
 				}))
 				added, _ := ts.getRegistrations()
 				assert.Len(t, added, 1, "There should be one added extension.")
-				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"192.168.1.1\",\"555.555.555.555\"]}", added[0])
 				ts.deleteService(getTestService(nil))
 				added, removed := ts.getRegistrations()
 				assert.Len(t, added, 1, "There should still only be one added extension.")
 				assert.Len(t, removed, 1, "There should be one removed extension.")
-				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", removed[0])
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"192.168.1.1\",\"555.555.555.555\"]}", removed[0])
 			},
 		},
 		{
@@ -141,14 +142,14 @@ func TestAutoRegistration_should_register_extensions(t *testing.T) {
 				}))
 				added, _ := ts.getRegistrations()
 				assert.Len(t, added, 1, "There should be one added extension.")
-				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"192.168.1.1\",\"555.555.555.555\"]}", added[0])
 				ts.updateService(getTestService(func(p *corev1.Service) {
 					p.ObjectMeta.Annotations = map[string]string{}
 				}))
 				added, removed := ts.getRegistrations()
 				assert.Len(t, added, 1, "There should still only be one added extension.")
 				assert.Len(t, removed, 1, "There should be one removed extension.")
-				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"192.168.1.1\",\"555.555.555.555\"]}", added[0])
 			},
 		},
 		{
@@ -165,7 +166,35 @@ func TestAutoRegistration_should_register_extensions(t *testing.T) {
 				ts.updateService(getTestService(nil))
 				added, _ = ts.getRegistrations()
 				assert.Len(t, added, 1, "There should be one added extension.")
-				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"555.555.555.555\",\"192.168.1.1\"]}", added[0])
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"192.168.1.1\",\"555.555.555.555\"]}", added[0])
+			},
+		},
+		{
+			name: "should keep a single stable registration for a service with multiple pods",
+			test: func(t *testing.T, ts TestSupport) {
+				ts.addService(getTestService(nil))
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
+					p.ObjectMeta.Annotations = map[string]string{}
+				}))
+				ts.addPod(getTestPod(func(p *corev1.Pod) {
+					p.ObjectMeta.Name = "test-pod-2"
+					p.ObjectMeta.Annotations = map[string]string{}
+					p.Status.PodIP = "192.168.1.2"
+				}))
+				added, removed := ts.getRegistrations()
+				assert.Len(t, added, 2, "The second pod should extend the registration.")
+				assert.Empty(t, removed, "The single-pod registration should be replaced in place.")
+				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"192.168.1.1\",\"192.168.1.2\",\"555.555.555.555\"]}", added[1])
+
+				for i := range 3 {
+					ts.updatePod(getTestPod(func(p *corev1.Pod) {
+						p.ObjectMeta.Annotations = map[string]string{}
+						p.ObjectMeta.Labels["revision"] = strconv.Itoa(i)
+					}))
+				}
+				added, removed = ts.getRegistrations()
+				assert.Len(t, added, 2, "Pod updates must not re-register the extension.")
+				assert.Empty(t, removed, "Pod updates must not de-register the extension.")
 			},
 		},
 		{
