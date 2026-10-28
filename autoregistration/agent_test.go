@@ -1,9 +1,14 @@
 package autoregistration
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExtensionsEqual(t *testing.T) {
@@ -216,4 +221,25 @@ func TestExtensionsEqual(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestRemoveMissingRegistrationsKeepsStillDiscoveredUrls(t *testing.T) {
+	var deleted []string
+	agent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		deleted = append(deleted, string(body))
+	}))
+	defer agent.Close()
+
+	err := removeMissingRegistrations(resty.New().SetBaseURL(agent.URL),
+		[]ExtensionConfigAO{
+			{Url: "http://changed:8080", RestrictedIps: []string{"192.168.1.1"}},
+			{Url: "http://gone:8080", RestrictedIps: []string{"192.168.1.2"}},
+		},
+		[]ExtensionConfigAO{
+			{Url: "http://changed:8080", RestrictedIps: []string{"192.168.1.1", "192.168.1.3"}},
+		})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{`{"url":"http://gone:8080","restrictedIps":["192.168.1.2"]}`}, deleted)
 }

@@ -183,7 +183,7 @@ func TestAutoRegistration_should_register_extensions(t *testing.T) {
 				}))
 				added, removed := ts.getRegistrations()
 				assert.Len(t, added, 2, "The second pod should extend the registration.")
-				assert.Len(t, removed, 1, "The single-pod registration should be replaced.")
+				assert.Empty(t, removed, "The single-pod registration should be replaced in place.")
 				assert.Equal(t, "{\"url\":\"http://test-service.default.svc.cluster.local:8085\",\"restrictedPorts\":{\"8080\":\"ContainerPort\",\"8081\":\"LivenessProbe\",\"8082\":\"ReadinessProbe\",\"8085\":\"ServicePort\"},\"restrictedIps\":[\"192.168.1.1\",\"192.168.1.2\",\"555.555.555.555\"]}", added[1])
 
 				for i := range 3 {
@@ -194,7 +194,7 @@ func TestAutoRegistration_should_register_extensions(t *testing.T) {
 				}
 				added, removed = ts.getRegistrations()
 				assert.Len(t, added, 2, "Pod updates must not re-register the extension.")
-				assert.Len(t, removed, 1, "Pod updates must not de-register the extension.")
+				assert.Empty(t, removed, "Pod updates must not de-register the extension.")
 			},
 		},
 		{

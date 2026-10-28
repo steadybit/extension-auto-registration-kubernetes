@@ -66,12 +66,9 @@ func createMockAgent() *httptest.Server {
 				body, _ := io.ReadAll(r.Body)
 				MU.Lock()
 				RemovedExtensions = append(RemovedExtensions, string(body))
-				for i, ext := range CurrentExtensions {
-					if ext == string(body) {
-						CurrentExtensions = append(CurrentExtensions[:i], CurrentExtensions[i+1:]...)
-						break
-					}
-				}
+				CurrentExtensions = slices.DeleteFunc(CurrentExtensions, func(ext string) bool {
+					return urlOf(ext) == urlOf(string(body))
+				})
 				MU.Unlock()
 			} else {
 				w.WriteHeader(http.StatusBadRequest)

@@ -3,6 +3,7 @@ package autoregistration
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/rs/zerolog/log"
@@ -39,14 +40,12 @@ func removeMissingRegistrations(httpClient *resty.Client, currentRegistrations [
 	var combinedError error
 
 	for _, currentRegistration := range currentRegistrations {
-		found := false
-		for _, discoveredExtension := range discoveredExtensions {
-			if extensionsEqual(currentRegistration, discoveredExtension) {
-				found = true
-				break
-			}
-		}
-		if !found {
+		// the agent identifies a registration by URL and unix socket and replaces it on the POST in addNewRegistrations,
+		// deleting a still discovered one first would leave the extension unregistered in between
+		stillDiscovered := slices.ContainsFunc(discoveredExtensions, func(discoveredExtension ExtensionConfigAO) bool {
+			return discoveredExtension.Url == currentRegistration.Url && discoveredExtension.UnixSocket == currentRegistration.UnixSocket
+		})
+		if !stillDiscovered {
 			resp, err := httpClient.R().
 				SetHeader("Content-Type", "application/json").
 				SetBasicAuth("_", extensionconfig.Config.AgentKey).
