@@ -1,15 +1,18 @@
 package autoregistration
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 
 	"github.com/rs/zerolog/log"
+	"github.com/steadybit/extension-auto-registration-kubernetes/autoregistration"
 )
 
 var MU = &sync.RWMutex{}
@@ -52,6 +55,10 @@ func createMockAgent() *httptest.Server {
 				body, _ := io.ReadAll(r.Body)
 				MU.Lock()
 				AddedExtensions = append(AddedExtensions, string(body))
+				// like the agent, keep a single registration per URL
+				CurrentExtensions = slices.DeleteFunc(CurrentExtensions, func(ext string) bool {
+					return urlOf(ext) == urlOf(string(body))
+				})
 				CurrentExtensions = append(CurrentExtensions, string(body))
 				MU.Unlock()
 			} else if strings.HasPrefix(r.URL.Path, "/extensions") && r.Method == http.MethodDelete {
@@ -74,4 +81,10 @@ func createMockAgent() *httptest.Server {
 	server.Start()
 	log.Info().Str("url", server.URL).Msg("Started Mock-Agent")
 	return &server
+}
+
+func urlOf(extension string) string {
+	var config autoregistration.ExtensionConfigAO
+	_ = json.Unmarshal([]byte(extension), &config)
+	return config.Url
 }

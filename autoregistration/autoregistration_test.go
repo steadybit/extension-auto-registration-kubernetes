@@ -44,3 +44,47 @@ func TestClusterIPsOfService(t *testing.T) {
 		})
 	}
 }
+
+func TestMergeByUrl(t *testing.T) {
+	serviceUrl := "http://test-service.default.svc.cluster.local:8085"
+	merged := mergeByUrl(map[string][]ExtensionConfigAO{
+		"default/test-pod-2": {{
+			Url:             serviceUrl,
+			RestrictedPorts: map[int]string{8085: "ServicePort", 8082: "ReadinessProbe"},
+			RestrictedIps:   []string{"172.20.14.11", "192.168.1.2"},
+		}},
+		"default/test-pod": {{
+			Url:             serviceUrl,
+			RestrictedPorts: map[int]string{8085: "ServicePort", 8081: "LivenessProbe"},
+			RestrictedIps:   []string{"172.20.14.11", "192.168.1.1"},
+		}},
+		"default/daemonset-pod": {{
+			Url:           "http://192.168.1.3:8080",
+			RestrictedIps: []string{"192.168.1.3"},
+		}},
+	})
+
+	assert.Equal(t, []ExtensionConfigAO{
+		{
+			Url:             "http://192.168.1.3:8080",
+			RestrictedPorts: map[int]string{},
+			RestrictedIps:   []string{"192.168.1.3"},
+		},
+		{
+			Url:             serviceUrl,
+			RestrictedPorts: map[int]string{8085: "ServicePort", 8081: "LivenessProbe", 8082: "ReadinessProbe"},
+			RestrictedIps:   []string{"172.20.14.11", "192.168.1.1", "192.168.1.2"},
+		},
+	}, merged)
+}
+
+func TestMergeByUrlDoesNotModifyPodConfigs(t *testing.T) {
+	serviceUrl := "http://test-service.default.svc.cluster.local:8085"
+	first := ExtensionConfigAO{Url: serviceUrl, RestrictedPorts: map[int]string{8085: "ServicePort"}, RestrictedIps: []string{"192.168.1.1"}}
+	second := ExtensionConfigAO{Url: serviceUrl, RestrictedPorts: map[int]string{8081: "LivenessProbe"}, RestrictedIps: []string{"192.168.1.2"}}
+
+	mergeByUrl(map[string][]ExtensionConfigAO{"default/a": {first}, "default/b": {second}})
+
+	assert.Equal(t, map[int]string{8085: "ServicePort"}, first.RestrictedPorts)
+	assert.Equal(t, []string{"192.168.1.1"}, first.RestrictedIps)
+}

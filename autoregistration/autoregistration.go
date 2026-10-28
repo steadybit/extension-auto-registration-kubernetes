@@ -273,12 +273,12 @@ func (r *AutoRegistration) syncRegistrations() {
 	var errGet, errRemove, errAdd error
 	currentRegistrations, errGet := getCurrentRegistrations(r.httpClient)
 	if errGet == nil {
-		discoveredExtensions := make([]ExtensionConfigAO, 0)
+		extensionsByPod := make(map[string][]ExtensionConfigAO)
 		r.discoveredExtensions.Range(func(key, value any) bool {
-			v := value.([]ExtensionConfigAO)
-			discoveredExtensions = append(discoveredExtensions, v...)
+			extensionsByPod[key.(string)] = value.([]ExtensionConfigAO)
 			return true
 		})
+		discoveredExtensions := mergeByUrl(extensionsByPod)
 		r.isDirty.Store(false)
 		errRemove = removeMissingRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
 		errAdd = addNewRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
@@ -292,6 +292,33 @@ func (r *AutoRegistration) syncRegistrations() {
 		log.Debug().Msg("Registrations synced successfully.")
 		time.AfterFunc(r.agentRegistrationInterval, r.syncRegistrations)
 	}
+}
+
+// mergeByUrl combines the configs of all pods into one config per URL. The agent keeps a single registration per URL,
+// while a Service-based extension yields one config per ready pod - same URL, but restricted to that pod's IP. Registered
+// one by one, the agent's registration would flip to whichever pod was posted last on every pod event, and each flip makes
+// the agent re-register the extension and re-run all of its discoveries.
+func mergeByUrl(extensionsByPod map[string][]ExtensionConfigAO) []ExtensionConfigAO {
+	byUrl := make(map[string]*ExtensionConfigAO)
+	for _, podKey := range slices.Sorted(maps.Keys(extensionsByPod)) {
+		for _, extension := range extensionsByPod[podKey] {
+			merged, found := byUrl[extension.Url]
+			if !found {
+				merged = &ExtensionConfigAO{UnixSocket: extension.UnixSocket, Url: extension.Url, Types: extension.Types, RestrictedPorts: map[int]string{}}
+				byUrl[extension.Url] = merged
+			}
+			mergeMaps(merged.RestrictedPorts, extension.RestrictedPorts)
+			merged.RestrictedIps = append(merged.RestrictedIps, extension.RestrictedIps...)
+		}
+	}
+	result := make([]ExtensionConfigAO, 0, len(byUrl))
+	for _, url := range slices.Sorted(maps.Keys(byUrl)) {
+		merged := byUrl[url]
+		slices.Sort(merged.RestrictedIps)
+		merged.RestrictedIps = slices.Compact(merged.RestrictedIps)
+		result = append(result, *merged)
+	}
+	return result
 }
 
 func mergeMaps(dest, src map[int]string) {
