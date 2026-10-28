@@ -4,8 +4,13 @@
 package autoregistration
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -87,4 +92,63 @@ func TestMergeByUrlDoesNotModifyPodConfigs(t *testing.T) {
 
 	assert.Equal(t, map[int]string{8085: "ServicePort"}, first.RestrictedPorts)
 	assert.Equal(t, []string{"192.168.1.1"}, first.RestrictedIps)
+}
+
+func TestSyncRegistrationsIsDirtyUntilTheAgentIsUpdated(t *testing.T) {
+	var dirtyWhilePosting bool
+	r := newRegistrationWithPendingChange(t, func(r *AutoRegistration, w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			dirtyWhilePosting = r.IsDirty()
+		}
+		respondEmptyList(w, req)
+	})
+
+	r.syncRegistrations()
+
+	assert.True(t, dirtyWhilePosting, "a sync in progress must still be reported as dirty")
+	assert.False(t, r.IsDirty())
+}
+
+func TestSyncRegistrationsKeepsChangesMadeWhileSyncingPending(t *testing.T) {
+	r := newRegistrationWithPendingChange(t, func(r *AutoRegistration, w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodPost {
+			r.changes.Add(1)
+		}
+		respondEmptyList(w, req)
+	})
+
+	r.syncRegistrations()
+
+	assert.True(t, r.IsDirty())
+}
+
+func TestSyncRegistrationsStaysDirtyWhenTheAgentFails(t *testing.T) {
+	r := newRegistrationWithPendingChange(t, func(_ *AutoRegistration, w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	r.syncRegistrations()
+
+	assert.True(t, r.IsDirty())
+}
+
+func newRegistrationWithPendingChange(t *testing.T, agent func(r *AutoRegistration, w http.ResponseWriter, req *http.Request)) *AutoRegistration {
+	r := &AutoRegistration{
+		discoveredExtensions:                &sync.Map{},
+		agentRegistrationInterval:           time.Hour,
+		agentRegistrationIntervalAfterError: time.Hour,
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) { agent(r, w, req) }))
+	t.Cleanup(server.Close)
+	r.httpClient = resty.New().SetBaseURL(server.URL)
+	r.discoveredExtensions.Store("default/test-pod", []ExtensionConfigAO{{Url: "http://192.168.1.1:8080"}})
+	r.changes.Add(1)
+	return r
+}
+
+func respondEmptyList(w http.ResponseWriter, req *http.Request) {
+	if req.Method == http.MethodGet {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("[]"))
+	}
 }

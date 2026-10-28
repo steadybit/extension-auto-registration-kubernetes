@@ -22,7 +22,8 @@ type AutoRegistration struct {
 	httpClient                          *resty.Client
 	k8sClient                           *client.Client
 	discoveredExtensions                *sync.Map
-	isDirty                             atomic.Bool
+	changes                             atomic.Uint64
+	syncedChanges                       atomic.Uint64
 	agentRegistrationInterval           time.Duration
 	agentRegistrationIntervalAfterError time.Duration
 	matchLabels                         config.Labels
@@ -38,7 +39,6 @@ func UpdateAgentExtensions(httpClient *resty.Client, k8sClient *client.Client) *
 		agentRegistrationIntervalAfterError: config.Config.AgentRegistrationIntervalAfterError,
 		matchLabels:                         config.Config.MatchLabels,
 		matchLabelsExclude:                  config.Config.MatchLabelsExclude,
-		isDirty:                             atomic.Bool{},
 	}
 
 	registrator.syncRegistrations()
@@ -47,8 +47,9 @@ func UpdateAgentExtensions(httpClient *resty.Client, k8sClient *client.Client) *
 	return &registrator
 }
 
+// IsDirty reports whether changes are not yet synced to the agent, including those of a sync still in progress.
 func (r *AutoRegistration) IsDirty() bool {
-	return r.isDirty.Load()
+	return r.changes.Load() != r.syncedChanges.Load()
 }
 
 func (r *AutoRegistration) processAddedPod(pod *corev1.Pod) {
@@ -56,7 +57,7 @@ func (r *AutoRegistration) processAddedPod(pod *corev1.Pod) {
 	if len(extensions) > 0 {
 		log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(extensions)).Msg("Pod added / extensions found.")
 		r.discoveredExtensions.Store(r.key(pod), extensions)
-		r.isDirty.Store(true)
+		r.changes.Add(1)
 	}
 }
 
@@ -65,13 +66,13 @@ func (r *AutoRegistration) processUpdatedPod(_ *corev1.Pod, new *corev1.Pod) {
 	if len(extensions) > 0 {
 		r.discoveredExtensions.Store(r.key(new), extensions)
 		log.Debug().Str("pod", new.Name).Str("namespace", new.Namespace).Int("count", len(extensions)).Msg("Pod updated / extensions found.")
-		r.isDirty.Store(true)
+		r.changes.Add(1)
 	} else {
 		value, loaded := r.discoveredExtensions.LoadAndDelete(r.key(new))
 		if loaded {
 			v := value.([]ExtensionConfigAO)
 			log.Debug().Str("pod", new.Name).Str("namespace", new.Namespace).Int("count", len(v)).Msg("Pod updated / no extensions found anymore.")
-			r.isDirty.Store(true)
+			r.changes.Add(1)
 		}
 	}
 }
@@ -81,7 +82,7 @@ func (r *AutoRegistration) processDeletedPod(pod *corev1.Pod) {
 	if loaded {
 		v := value.([]ExtensionConfigAO)
 		log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(v)).Msg("Pod deleted / extension will be deregistered.")
-		r.isDirty.Store(true)
+		r.changes.Add(1)
 	}
 }
 
@@ -264,7 +265,9 @@ func (r *AutoRegistration) containsValue(m map[int]string, value string) bool {
 }
 
 func (r *AutoRegistration) syncRegistrations() {
-	if !r.isDirty.Load() {
+	// read before collecting the discovered extensions, so changes made while syncing stay pending
+	changes := r.changes.Load()
+	if changes == r.syncedChanges.Load() {
 		time.AfterFunc(r.agentRegistrationInterval, r.syncRegistrations)
 		log.Trace().Msgf("No changes detected, waiting for %s before next check.", r.agentRegistrationInterval)
 		return
@@ -279,16 +282,15 @@ func (r *AutoRegistration) syncRegistrations() {
 			return true
 		})
 		discoveredExtensions := mergeByUrl(extensionsByPod)
-		r.isDirty.Store(false)
 		errRemove = removeMissingRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
 		errAdd = addNewRegistrations(r.httpClient, currentRegistrations, discoveredExtensions)
 	}
 
 	if (errGet != nil) || (errRemove != nil) || (errAdd != nil) {
-		r.isDirty.Store(true)
 		log.Info().Msgf("Retry in %s", r.agentRegistrationIntervalAfterError)
 		time.AfterFunc(r.agentRegistrationIntervalAfterError, r.syncRegistrations)
 	} else {
+		r.syncedChanges.Store(changes)
 		log.Debug().Msg("Registrations synced successfully.")
 		time.AfterFunc(r.agentRegistrationInterval, r.syncRegistrations)
 	}
