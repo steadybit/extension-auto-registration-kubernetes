@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.21
+
+- build(deps): bump k8s.io/client-go from 0.37.1 to 0.37.2
+- chore(deps): bump golang.org/x/net to v0.62.0
+- chore: add the SPDX license header to all Go files (#96)
+- fix: register a service-based extension once per URL across all its pods (#95)
+
 ## v1.0.20
 
 - build(deps): bump github.com/steadybit/extension-kit
