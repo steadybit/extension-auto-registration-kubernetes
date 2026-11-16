@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.22
+
+- build(deps): bump github.com/steadybit/extension-kit
+
 ## v1.0.21
 
 - build(deps): bump k8s.io/client-go from 0.37.1 to 0.37.2
