@@ -22,3 +22,4 @@ discover extensions that are installed in the cluster and will sync/register the
 The process requires access rights to interact with the Kubernetes API.
 
 The cluster role for the agent requires "read"/"list" and "watch"  permissions for "pods" and "services" in the cluster.
+
