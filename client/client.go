@@ -124,38 +124,38 @@ func CreateClient(clientset kubernetes.Interface, stopCh <-chan struct{}) *Clien
 	return client
 }
 
-func (c *Client) WatchPods(add func(pod *corev1.Pod), update func(old *corev1.Pod, new *corev1.Pod), delete func(pod informersCorev1.DeletedPod)) {
+func (c *Client) WatchPods(onAdd func(pod *corev1.Pod), onUpdate func(oldPod, newPod *corev1.Pod), onDelete func(pod informersCorev1.DeletedPod)) {
 	if _, err := c.pod.informer.AddTypedEventHandler(informersCorev1.PodHandlerFuncs{
 		AddFunc: func(pod *corev1.Pod) {
 			log.Trace().Str("pod", pod.Name).Str("namespace", pod.Namespace).Msg("k8s pod added")
-			add(pod)
+			onAdd(pod)
 		},
 		UpdateFunc: func(oldPod, newPod *corev1.Pod) {
 			log.Trace().Str("pod", newPod.Name).Str("namespace", newPod.Namespace).Msg("k8s pod updated")
-			update(oldPod, newPod)
+			onUpdate(oldPod, newPod)
 		},
 		DeleteFunc: func(pod informersCorev1.DeletedPod) {
 			log.Trace().Str("pod", pod.GetName()).Str("namespace", pod.GetNamespace()).Msg("k8s pod deleted")
-			delete(pod)
+			onDelete(pod)
 		},
 	}); err != nil {
 		log.Fatal().Msg("failed to add pod event handler")
 	}
 }
 
-func (c *Client) WatchServices(add func(service *corev1.Service), update func(old *corev1.Service, new *corev1.Service), delete func(service informersCorev1.DeletedService)) {
+func (c *Client) WatchServices(onAdd func(service *corev1.Service), onUpdate func(oldService, newService *corev1.Service), onDelete func(service informersCorev1.DeletedService)) {
 	if _, err := c.service.informer.AddTypedEventHandler(informersCorev1.ServiceHandlerFuncs{
 		AddFunc: func(service *corev1.Service) {
 			log.Trace().Str("service", service.Name).Str("namespace", service.Namespace).Msg("k8s service added")
-			add(service)
+			onAdd(service)
 		},
 		UpdateFunc: func(oldService, newService *corev1.Service) {
 			log.Trace().Str("service", newService.Name).Str("namespace", newService.Namespace).Msg("k8s service updated")
-			update(oldService, newService)
+			onUpdate(oldService, newService)
 		},
 		DeleteFunc: func(service informersCorev1.DeletedService) {
 			log.Trace().Str("service", service.GetName()).Str("namespace", service.GetNamespace()).Msg("k8s service deleted")
-			delete(service)
+			onDelete(service)
 		},
 	}); err != nil {
 		log.Fatal().Msg("failed to add service event handler")
