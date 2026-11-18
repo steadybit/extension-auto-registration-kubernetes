@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.0
+
+- ci: CLA check with a GitHub App token (#102)
+- ci: stop passing unused secrets to the shared workflow (#104)
+- feat: configurable credentials for the agent API (#105)
+
 ## v1.0.22
 
 - build(deps): bump github.com/steadybit/extension-kit
