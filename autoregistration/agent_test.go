@@ -251,7 +251,7 @@ func TestRemoveMissingRegistrationsKeepsStillDiscoveredUrls(t *testing.T) {
 func TestRegistrationCallsSendConfiguredCredentials(t *testing.T) {
 	original := extensionconfig.Config
 	t.Cleanup(func() { extensionconfig.Config = original })
-	extensionconfig.Config = extensionconfig.Specification{AgentKey: "agent-key", AgentApiUsername: "registrar", AgentApiPassword: "api-secret"}
+	extensionconfig.Config = extensionconfig.Specification{AgentApiUsername: "registrar", AgentApiPassword: "api-secret"}
 
 	type call struct{ method, username, password string }
 	var calls []call

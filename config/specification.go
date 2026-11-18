@@ -10,6 +10,7 @@ import (
 )
 
 type Specification struct {
+	// Deprecated: AgentKey is only read as a fallback for AgentApiPassword.
 	AgentKey                            string        `json:"agentKey" split_words:"true" required:"false"`
 	AgentApiUsername                    string        `json:"agentApiUsername" split_words:"true" default:"_"`
 	AgentApiPassword                    string        `json:"agentApiPassword" split_words:"true" required:"false"`
@@ -23,20 +24,16 @@ type Specification struct {
 	AgentRegistrationIntervalAfterError time.Duration `json:"agentRegistrationIntervalAfterError" split_words:"true" default:"5s"`
 }
 
-// AgentApiCredentials returns the Basic-auth credentials for the agent API. Like the agent itself, the password
-// falls back to the agent key when no dedicated API password is configured.
-func (s *Specification) AgentApiCredentials() (string, string) {
-	if s.AgentApiPassword != "" {
-		return s.AgentApiUsername, s.AgentApiPassword
+// ResolveAgentApiPassword falls back to the deprecated AgentKey when no AgentApiPassword is set, and reports whether
+// the deprecated AgentKey was configured at all.
+func (s *Specification) ResolveAgentApiPassword() (usesDeprecatedAgentKey bool, err error) {
+	if s.AgentApiPassword == "" {
+		s.AgentApiPassword = s.AgentKey
 	}
-	return s.AgentApiUsername, s.AgentKey
-}
-
-func (s *Specification) Validate() error {
-	if s.AgentKey == "" && s.AgentApiPassword == "" {
-		return errors.New("either STEADYBIT_EXTENSION_AGENT_KEY or STEADYBIT_EXTENSION_AGENT_API_PASSWORD must be set")
+	if s.AgentApiPassword == "" {
+		return false, errors.New("STEADYBIT_EXTENSION_AGENT_API_PASSWORD must be set")
 	}
-	return nil
+	return s.AgentKey != "", nil
 }
 
 type Labels []Label

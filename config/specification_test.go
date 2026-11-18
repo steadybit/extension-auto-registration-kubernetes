@@ -11,34 +11,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAgentApiCredentials(t *testing.T) {
+func TestResolveAgentApiPassword(t *testing.T) {
 	tests := []struct {
-		name             string
-		env              map[string]string
-		expectedUsername string
-		expectedPassword string
+		name                   string
+		env                    map[string]string
+		expectedUsername       string
+		expectedPassword       string
+		usesDeprecatedAgentKey bool
 	}{
 		{
-			name:             "defaults to _ and the agent key",
-			env:              map[string]string{"STEADYBIT_EXTENSION_AGENT_KEY": "agent-key"},
-			expectedUsername: "_",
-			expectedPassword: "agent-key",
-		},
-		{
-			name: "uses the configured username and password",
-			env: map[string]string{
-				"STEADYBIT_EXTENSION_AGENT_KEY":          "agent-key",
-				"STEADYBIT_EXTENSION_AGENT_API_USERNAME": "registrar",
-				"STEADYBIT_EXTENSION_AGENT_API_PASSWORD": "api-secret",
-			},
+			name:             "uses the configured username and password",
+			env:              map[string]string{"STEADYBIT_EXTENSION_AGENT_API_USERNAME": "registrar", "STEADYBIT_EXTENSION_AGENT_API_PASSWORD": "api-secret"},
 			expectedUsername: "registrar",
 			expectedPassword: "api-secret",
 		},
 		{
-			name:             "works without an agent key when a password is set",
-			env:              map[string]string{"STEADYBIT_EXTENSION_AGENT_API_PASSWORD": "api-secret"},
-			expectedUsername: "_",
-			expectedPassword: "api-secret",
+			name:                   "falls back to the deprecated agent key",
+			env:                    map[string]string{"STEADYBIT_EXTENSION_AGENT_KEY": "agent-key"},
+			expectedUsername:       "_",
+			expectedPassword:       "agent-key",
+			usesDeprecatedAgentKey: true,
+		},
+		{
+			name:                   "prefers the password over the deprecated agent key",
+			env:                    map[string]string{"STEADYBIT_EXTENSION_AGENT_KEY": "agent-key", "STEADYBIT_EXTENSION_AGENT_API_PASSWORD": "api-secret"},
+			expectedUsername:       "_",
+			expectedPassword:       "api-secret",
+			usesDeprecatedAgentKey: true,
 		},
 	}
 	for _, tt := range tests {
@@ -48,17 +47,22 @@ func TestAgentApiCredentials(t *testing.T) {
 			}
 			var spec Specification
 			require.NoError(t, envconfig.Process("steadybit_extension", &spec))
-			require.NoError(t, spec.Validate())
 
-			username, password := spec.AgentApiCredentials()
-			assert.Equal(t, tt.expectedUsername, username)
-			assert.Equal(t, tt.expectedPassword, password)
+			usesDeprecatedAgentKey, err := spec.ResolveAgentApiPassword()
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.usesDeprecatedAgentKey, usesDeprecatedAgentKey)
+			assert.Equal(t, tt.expectedUsername, spec.AgentApiUsername)
+			assert.Equal(t, tt.expectedPassword, spec.AgentApiPassword)
 		})
 	}
 }
 
-func TestValidateRequiresAgentKeyOrPassword(t *testing.T) {
+func TestResolveAgentApiPasswordRequiresAPassword(t *testing.T) {
 	var spec Specification
 	require.NoError(t, envconfig.Process("steadybit_extension", &spec))
-	assert.Error(t, spec.Validate())
+
+	_, err := spec.ResolveAgentApiPassword()
+
+	assert.Error(t, err)
 }
