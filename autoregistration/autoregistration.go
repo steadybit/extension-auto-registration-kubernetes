@@ -19,6 +19,7 @@ import (
 	"github.com/steadybit/extension-auto-registration-kubernetes/client"
 	"github.com/steadybit/extension-auto-registration-kubernetes/config"
 	corev1 "k8s.io/api/core/v1"
+	informersCorev1 "k8s.io/client-go/informers/core/v1"
 )
 
 type AutoRegistration struct {
@@ -80,11 +81,11 @@ func (r *AutoRegistration) processUpdatedPod(_ *corev1.Pod, new *corev1.Pod) {
 	}
 }
 
-func (r *AutoRegistration) processDeletedPod(pod *corev1.Pod) {
+func (r *AutoRegistration) processDeletedPod(pod informersCorev1.DeletedPod) {
 	value, loaded := r.discoveredExtensions.LoadAndDelete(r.key(pod))
 	if loaded {
 		v := value.([]ExtensionConfigAO)
-		log.Debug().Str("pod", pod.Name).Str("namespace", pod.Namespace).Int("count", len(v)).Msg("Pod deleted / extension will be deregistered.")
+		log.Debug().Str("pod", pod.GetName()).Str("namespace", pod.GetNamespace()).Int("count", len(v)).Msg("Pod deleted / extension will be deregistered.")
 		r.changes.Add(1)
 	}
 }
@@ -107,8 +108,13 @@ func (r *AutoRegistration) processUpdatedService(old *corev1.Service, new *corev
 	}
 }
 
-func (r *AutoRegistration) processDeletedService(service *corev1.Service) {
-	pods := r.k8sClient.PodsByService(service)
+func (r *AutoRegistration) processDeletedService(service informersCorev1.DeletedService) {
+	// Without the last known state the selector is unknown; the affected pods are re-evaluated on their next update.
+	if service.OptionalObj == nil {
+		log.Debug().Str("service", service.GetName()).Str("namespace", service.GetNamespace()).Msg("Service deleted without last known state / skipping pod re-evaluation.")
+		return
+	}
+	pods := r.k8sClient.PodsByService(service.OptionalObj)
 	for _, pod := range pods {
 		r.processUpdatedPod(nil, pod)
 	}
@@ -230,8 +236,11 @@ func (r *AutoRegistration) parseAnnotationJSON(value string) []ExtensionAnnotati
 	return extAnnotations.Extensions
 }
 
-func (r *AutoRegistration) key(pod *corev1.Pod) string {
-	return pod.Namespace + "/" + pod.Name
+func (r *AutoRegistration) key(pod interface {
+	GetNamespace() string
+	GetName() string
+}) string {
+	return pod.GetNamespace() + "/" + pod.GetName()
 }
 
 func (r *AutoRegistration) getAdditionalPortsOfPod(pod *corev1.Pod) map[int]string {
