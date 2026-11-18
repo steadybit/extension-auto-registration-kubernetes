@@ -13,6 +13,9 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	informersCorev1 "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/tools/cache"
 )
 
 func TestClusterIPsOfService(t *testing.T) {
@@ -151,4 +154,42 @@ func respondEmptyList(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte("[]"))
 	}
+}
+
+func TestProcessDeletedPod(t *testing.T) {
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "default"}}
+	tests := []struct {
+		name    string
+		deleted informersCorev1.DeletedPod
+	}{
+		{
+			name:    "deleted pod",
+			deleted: informersCorev1.DeletedPod{OptionalObj: pod},
+		},
+		{
+			name:    "missed deletion",
+			deleted: informersCorev1.DeletedPod{FinalStateUnknown: &cache.DeletedFinalStateUnknown{Key: "default/test-pod"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &AutoRegistration{discoveredExtensions: &sync.Map{}}
+			r.discoveredExtensions.Store("default/test-pod", []ExtensionConfigAO{{Url: "http://192.168.1.1:8080"}})
+
+			r.processDeletedPod(tt.deleted)
+
+			_, found := r.discoveredExtensions.Load("default/test-pod")
+			assert.False(t, found)
+			assert.Equal(t, uint64(1), r.changes.Load())
+		})
+	}
+}
+
+func TestProcessDeletedServiceWithoutLastKnownState(t *testing.T) {
+	r := &AutoRegistration{discoveredExtensions: &sync.Map{}}
+
+	assert.NotPanics(t, func() {
+		r.processDeletedService(informersCorev1.DeletedService{FinalStateUnknown: &cache.DeletedFinalStateUnknown{Key: "default/test-service"}})
+	})
 }
