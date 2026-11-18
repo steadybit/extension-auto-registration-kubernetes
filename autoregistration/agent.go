@@ -51,7 +51,7 @@ func removeMissingRegistrations(httpClient *resty.Client, currentRegistrations [
 		if !stillDiscovered {
 			resp, err := httpClient.R().
 				SetHeader("Content-Type", "application/json").
-				SetBasicAuth("_", extensionconfig.Config.AgentKey).
+				SetBasicAuth(extensionconfig.Config.AgentApiCredentials()).
 				SetBody(currentRegistration).
 				Delete("/extensions")
 			if err != nil {
@@ -85,7 +85,7 @@ func addNewRegistrations(httpClient *resty.Client, currentRegistrations []Extens
 		if !found {
 			resp, err := httpClient.R().
 				SetHeader("Content-Type", "application/json").
-				SetBasicAuth("_", extensionconfig.Config.AgentKey).
+				SetBasicAuth(extensionconfig.Config.AgentApiCredentials()).
 				SetBody(discoveredExtension).
 				Post("/extensions")
 			if err != nil {

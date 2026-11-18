@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/go-resty/resty/v2"
+	extensionconfig "github.com/steadybit/extension-auto-registration-kubernetes/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -245,4 +246,27 @@ func TestRemoveMissingRegistrationsKeepsStillDiscoveredUrls(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{`{"url":"http://gone:8080","restrictedIps":["192.168.1.2"]}`}, deleted)
+}
+
+func TestRegistrationCallsSendConfiguredCredentials(t *testing.T) {
+	original := extensionconfig.Config
+	t.Cleanup(func() { extensionconfig.Config = original })
+	extensionconfig.Config = extensionconfig.Specification{AgentKey: "agent-key", AgentApiUsername: "registrar", AgentApiPassword: "api-secret"}
+
+	type call struct{ method, username, password string }
+	var calls []call
+	agent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username, password, _ := r.BasicAuth()
+		calls = append(calls, call{r.Method, username, password})
+	}))
+	defer agent.Close()
+	httpClient := resty.New().SetBaseURL(agent.URL)
+
+	require.NoError(t, addNewRegistrations(httpClient, nil, []ExtensionConfigAO{{Url: "http://new:8080"}}))
+	require.NoError(t, removeMissingRegistrations(httpClient, []ExtensionConfigAO{{Url: "http://gone:8080"}}, nil))
+
+	assert.Equal(t, []call{
+		{http.MethodPost, "registrar", "api-secret"},
+		{http.MethodDelete, "registrar", "api-secret"},
+	}, calls)
 }
