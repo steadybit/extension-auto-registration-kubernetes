@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.1
+
+- build(deps): bump github.com/steadybit/extension-kit
+- fix: don't crash when the informer reports a missed pod or service deletion (#106)
+- refactor: don't shadow the delete builtin in the watch callbacks (#107)
+
 ## v1.1.0
 
 - ci: CLA check with a GitHub App token (#102)
